@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wiki</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+    }
+    .wiki-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2em;
+    }
+    .wiki-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1em;
+      padding-bottom: 1em;
+      border-bottom: 1px solid #ddd;
+    }
+    .wiki-title {
+      margin: 0;
+      font-size: 1.5em;
+    }
+    .wiki-actions {
+      display: flex;
+      gap: 0.5em;
+    }
+    .btn {
+      padding: 0.5em 1em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      font-size: 0.875em;
+    }
+    .btn:hover {
+      background: #f0f0f0;
+    }
+    .btn-primary {
+      background: #0066cc;
+      color: white;
+      border-color: #0066cc;
+    }
+    .btn-primary:hover {
+      background: #0055aa;
+    }
+    .wiki-content {
+      background: white;
+      padding: 2em;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      line-height: 1.6;
+    }
+    .wiki-content h1:first-child {
+      margin-top: 0;
+    }
+    .wiki-content a {
+      color: #0066cc;
+    }
+    .wiki-content pre {
+      background: #f5f5f5;
+      padding: 1em;
+      overflow-x: auto;
+      border-radius: 4px;
+    }
+    .wiki-content code {
+      background: #f5f5f5;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .wiki-content pre code {
+      background: none;
+      padding: 0;
+    }
+    .wiki-meta {
+      margin-top: 2em;
+      padding-top: 1em;
+      border-top: 1px solid #eee;
+      font-size: 0.875em;
+      color: #666;
+    }
+    .wiki-nav {
+      margin-bottom: 1em;
+      font-size: 0.875em;
+    }
+    .wiki-nav a {
+      color: #666;
+      text-decoration: none;
+    }
+    .wiki-nav a:hover {
+      color: #0066cc;
+    }
+    /* Editor styles */
+    .wiki-editor {
+      display: none;
+    }
+    .wiki-editor.active {
+      display: block;
+    }
+    .wiki-viewer.hidden {
+      display: none;
+    }
+    .wiki-editor textarea {
+      width: 100%;
+      min-height: 400px;
+      padding: 1em;
+      font-family: monospace;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+    }
+    .wiki-editor-toolbar {
+      display: flex;
+      gap: 1em;
+      margin-bottom: 1em;
+      align-items: center;
+    }
+    .wiki-editor-toolbar input {
+      flex: 1;
+      padding: 0.5em;
+      font-size: 1em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .error {
+      background: #ffe6e6;
+      color: #cc0000;
+      padding: 1em;
+      border-radius: 4px;
+      margin-bottom: 1em;
+    }
+    .loading {
+      text-align: center;
+      padding: 2em;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="wiki-container">
+    <div class="wiki-nav">
+      <a href="?">Home</a> |
+      <a href="?doc=_index">Index</a> |
+      <a href="admin">Admin</a>
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div id="loading" class="loading">Loading...</div>
+
+    <div id="viewer" class="wiki-viewer" style="display: none;">
+      <div class="wiki-header">
+        <h1 class="wiki-title" id="doc-title"></h1>
+        <div class="wiki-actions">
+          <button class="btn btn-primary" id="edit-btn" style="display: none;">Edit</button>
+        </div>
+      </div>
+      <div class="wiki-content" id="doc-content"></div>
+      <div class="wiki-meta" id="doc-meta"></div>
+    </div>
+
+    <div id="editor" class="wiki-editor">
+      <div class="wiki-header">
+        <h1 class="wiki-title">Editing: <span id="edit-doc-id"></span></h1>
+        <div class="wiki-actions">
+          <button class="btn" id="cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="save-btn">Save</button>
+        </div>
+      </div>
+      <div class="wiki-editor-toolbar">
+        <input type="text" id="edit-title" placeholder="Document title">
+        <select id="edit-visibility">
+          <option value="public">Public</option>
+          <option value="private">Private</option>
+        </select>
+      </div>
+      <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
+    </div>
+  </div>
+
+  <script type="module">
+    const API_BASE = '/agent/epistery/wiki';
+
+    let currentDoc = null;
+    let canEdit = false;
+
+    // Get doc ID from URL
+    function getDocId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('doc') || 'Home';
+    }
+
+    // Load and display document
+    async function loadDocument(docId) {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('viewer').style.display = 'none';
+      document.getElementById('editor').classList.remove('active');
+      document.getElementById('error').style.display = 'none';
+
+      // Special case: index
+      if (docId === '_index') {
+        await loadIndex();
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/${encodeURIComponent(docId)}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            // New document - show editor
+            currentDoc = { _id: docId, title: docId, body: `# ${docId}\n`, visibility: 'public', _new: true };
+            showEditor();
+            return;
+          }
+          throw new Error(`Failed to load: ${response.status}`);
+        }
+
+        currentDoc = await response.json();
+        await renderDocument();
+
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    // Load index
+    async function loadIndex() {
+      try {
+        const response = await fetch(`${API_BASE}/index`);
+        const docs = await response.json();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('viewer').style.display = 'block';
+        document.getElementById('doc-title').textContent = 'Document Index';
+        document.getElementById('edit-btn').style.display = 'none';
+
+        const html = '<ul>' + docs
+          .filter(d => d.listed !== false)
+          .map(d => `<li><a href="?doc=${encodeURIComponent(d._id)}">${escapeHtml(d.title || d._id)}</a></li>`)
+          .join('') + '</ul>';
+
+        document.getElementById('doc-content').innerHTML = html;
+        document.getElementById('doc-meta').innerHTML = `${docs.length} documents`;
+
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    // Render document
+    async function renderDocument() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('viewer').style.display = 'block';
+
+      document.getElementById('doc-title').textContent = currentDoc.title || currentDoc._id;
+
+      // Render markdown
+      const { marked } = await import('https://cdn.jsdelivr.net/npm/marked@12.0.0/lib/marked.esm.js');
+      const html = await marked.parse(currentDoc.body || '');
+      document.getElementById('doc-content').innerHTML = html;
+
+      // Meta
+      let meta = [];
+      if (currentDoc._modified) {
+        meta.push('Modified: ' + new Date(currentDoc._modified).toLocaleString());
+      }
+      if (currentDoc.visibility && currentDoc.visibility !== 'public') {
+        meta.push('Visibility: ' + currentDoc.visibility);
+      }
+      document.getElementById('doc-meta').innerHTML = meta.join(' | ');
+
+      // Check if user can edit (try a HEAD or just show button and let save fail)
+      document.getElementById('edit-btn').style.display = 'block';
+      canEdit = true;
+
+      // Process wiki links
+      document.getElementById('doc-content').querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href');
+        if (href && href.startsWith('/wiki/')) {
+          const docId = href.replace('/wiki/', '');
+          a.href = '?doc=' + encodeURIComponent(docId);
+        }
+      });
+    }
+
+    // Show editor
+    function showEditor() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('viewer').style.display = 'none';
+      document.getElementById('viewer').classList.add('hidden');
+      document.getElementById('editor').classList.add('active');
+
+      document.getElementById('edit-doc-id').textContent = currentDoc._id;
+      document.getElementById('edit-title').value = currentDoc.title || currentDoc._id;
+      document.getElementById('edit-body').value = currentDoc.body || '';
+      document.getElementById('edit-visibility').value = currentDoc.visibility || 'public';
+    }
+
+    // Hide editor
+    function hideEditor() {
+      document.getElementById('editor').classList.remove('active');
+      document.getElementById('viewer').classList.remove('hidden');
+      document.getElementById('viewer').style.display = 'block';
+    }
+
+    // Save document
+    async function saveDocument() {
+      const doc = {
+        title: document.getElementById('edit-title').value,
+        body: document.getElementById('edit-body').value,
+        visibility: document.getElementById('edit-visibility').value
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/${encodeURIComponent(currentDoc._id)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc)
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || `Save failed: ${response.status}`);
+        }
+
+        currentDoc = await response.json();
+        hideEditor();
+        await renderDocument();
+
+      } catch (error) {
+        showError('Save failed: ' + error.message);
+      }
+    }
+
+    // Show error
+    function showError(message) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = message;
+      document.getElementById('error').style.display = 'block';
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Event listeners
+    document.getElementById('edit-btn').addEventListener('click', showEditor);
+    document.getElementById('cancel-btn').addEventListener('click', () => {
+      if (currentDoc._new) {
+        window.location.href = '?';
+      } else {
+        hideEditor();
+      }
+    });
+    document.getElementById('save-btn').addEventListener('click', saveDocument);
+
+    // Initial load
+    loadDocument(getDocId());
+  </script>
+</body>
+</html>

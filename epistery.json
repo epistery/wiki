@@ -1,0 +1,20 @@
+{
+  "name": "@epistery/wiki",
+  "version": "0.1.0",
+  "description": "Decentralized wiki with IPFS storage and epistery authentication",
+  "author": "Epistery",
+  "main": "index.mjs",
+  "icon": "/agent/epistery/wiki/icon.svg",
+  "widget": "/agent/epistery/wiki/widget",
+  "noUserInterface": false,
+  "permissions": [
+    "wiki:read",
+    "wiki:write",
+    "wiki:admin"
+  ],
+  "config": {
+    "requireIdentity": false,
+    "defaultMode": "passive",
+    "rootDoc": "Home"
+  }
+}

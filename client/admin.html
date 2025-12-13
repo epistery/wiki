@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Wiki Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 2em;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 1em 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+    }
+    h1 svg {
+      width: 32px;
+      height: 32px;
+    }
+    .stats {
+      display: flex;
+      gap: 2em;
+      margin-bottom: 2em;
+      padding: 1em;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2em;
+      font-weight: 600;
+      color: #333;
+    }
+    .stat-label {
+      font-size: 0.875em;
+      color: #666;
+    }
+    .documents {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .documents-header {
+      padding: 1em;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .documents-header h2 {
+      margin: 0;
+    }
+    .btn {
+      padding: 0.5em 1em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.875em;
+    }
+    .btn-primary {
+      background: #0066cc;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #0055aa;
+    }
+    .btn-danger {
+      background: #cc3333;
+      color: white;
+    }
+    .document-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .document-item {
+      display: flex;
+      align-items: center;
+      padding: 1em;
+      border-bottom: 1px solid #eee;
+    }
+    .document-item:last-child {
+      border-bottom: none;
+    }
+    .document-item:hover {
+      background: #f9f9f9;
+    }
+    .document-title {
+      flex: 1;
+    }
+    .document-title a {
+      color: #333;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .document-title a:hover {
+      color: #0066cc;
+    }
+    .document-meta {
+      font-size: 0.75em;
+      color: #999;
+      margin-top: 0.25em;
+    }
+    .document-visibility {
+      padding: 0.25em 0.5em;
+      border-radius: 4px;
+      font-size: 0.75em;
+      margin-right: 1em;
+    }
+    .visibility-public {
+      background: #e6f7e6;
+      color: #339933;
+    }
+    .visibility-private {
+      background: #fff3e6;
+      color: #cc6600;
+    }
+    .document-actions {
+      display: flex;
+      gap: 0.5em;
+    }
+    .btn-small {
+      padding: 0.25em 0.5em;
+      font-size: 0.75em;
+    }
+    .empty {
+      padding: 2em;
+      text-align: center;
+      color: #666;
+    }
+    .error {
+      padding: 1em;
+      background: #ffe6e6;
+      color: #cc0000;
+      border-radius: 4px;
+      margin-bottom: 1em;
+    }
+    .loading {
+      padding: 2em;
+      text-align: center;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        <line x1="8" y1="6" x2="16" y2="6"/>
+        <line x1="8" y1="10" x2="16" y2="10"/>
+        <line x1="8" y1="14" x2="12" y2="14"/>
+      </svg>
+      Wiki Admin
+    </h1>
+
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div class="stats" id="stats">
+      <div class="stat">
+        <div class="stat-value" id="doc-count">-</div>
+        <div class="stat-label">Documents</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="public-count">-</div>
+        <div class="stat-label">Public</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="private-count">-</div>
+        <div class="stat-label">Private</div>
+      </div>
+    </div>
+
+    <div class="documents">
+      <div class="documents-header">
+        <h2>Documents</h2>
+        <button class="btn btn-primary" onclick="createDocument()">New Document</button>
+      </div>
+      <div id="document-list" class="loading">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/agent/epistery/wiki';
+
+    async function loadDocuments() {
+      try {
+        const response = await fetch(API_BASE + '/index');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const docs = await response.json();
+
+        // Update stats
+        document.getElementById('doc-count').textContent = docs.length;
+        document.getElementById('public-count').textContent = docs.filter(d => d.visibility === 'public').length;
+        document.getElementById('private-count').textContent = docs.filter(d => d.visibility !== 'public').length;
+
+        // Render list
+        const listEl = document.getElementById('document-list');
+        if (docs.length === 0) {
+          listEl.innerHTML = '<div class="empty">No documents yet. Create your first document!</div>';
+          return;
+        }
+
+        const sortedDocs = docs.sort((a, b) => {
+          // Root menu items first
+          if (a.rootmenu && !b.rootmenu) return -1;
+          if (!a.rootmenu && b.rootmenu) return 1;
+          // Then alphabetically
+          return (a.title || a._id).localeCompare(b.title || b._id);
+        });
+
+        listEl.innerHTML = '<ul class="document-list">' + sortedDocs.map(doc => `
+          <li class="document-item">
+            <div class="document-title">
+              <a href="#" onclick="editDocument('${escapeHtml(doc._id)}'); return false;">${escapeHtml(doc.title || doc._id)}</a>
+              <div class="document-meta">
+                ${doc._modified ? 'Modified ' + new Date(doc._modified).toLocaleDateString() : ''}
+                ${doc._pid ? '&bull; Parent: ' + escapeHtml(doc._pid) : ''}
+              </div>
+            </div>
+            <span class="document-visibility visibility-${doc.visibility || 'public'}">
+              ${doc.visibility || 'public'}
+            </span>
+            <div class="document-actions">
+              <button class="btn btn-small" onclick="editDocument('${escapeHtml(doc._id)}')">Edit</button>
+              <button class="btn btn-small btn-danger" onclick="deleteDocument('${escapeHtml(doc._id)}')">Delete</button>
+            </div>
+          </li>
+        `).join('') + '</ul>';
+
+      } catch (error) {
+        console.error('[wiki-admin] Load error:', error);
+        document.getElementById('error').textContent = 'Failed to load documents: ' + error.message;
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('document-list').innerHTML = '<div class="empty">Failed to load</div>';
+      }
+    }
+
+    function createDocument() {
+      const docId = prompt('Enter document ID (e.g., MyNewPage):');
+      if (docId) {
+        openEditor(docId);
+      }
+    }
+
+    function editDocument(docId) {
+      openEditor(docId);
+    }
+
+    async function openEditor(docId) {
+      // Load existing document or create new
+      let doc = { _id: docId, title: docId, body: `# ${docId}\n`, visibility: 'public' };
+      try {
+        const response = await fetch(API_BASE + '/' + encodeURIComponent(docId));
+        if (response.ok) {
+          doc = await response.json();
+        }
+      } catch (e) {}
+
+      // Simple modal editor
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+      modal.innerHTML = `
+        <div style="background:white;padding:2em;border-radius:8px;width:80%;max-width:800px;max-height:80vh;overflow:auto">
+          <h2>Edit: ${escapeHtml(docId)}</h2>
+          <div style="margin:1em 0">
+            <label>Title: <input type="text" id="edit-title" value="${escapeHtml(doc.title || docId)}" style="width:100%;padding:0.5em"></label>
+          </div>
+          <div style="margin:1em 0">
+            <label>Visibility:
+              <select id="edit-visibility">
+                <option value="public" ${doc.visibility === 'public' ? 'selected' : ''}>Public</option>
+                <option value="private" ${doc.visibility !== 'public' ? 'selected' : ''}>Private</option>
+              </select>
+            </label>
+          </div>
+          <div style="margin:1em 0">
+            <label>Content:</label>
+            <textarea id="edit-body" style="width:100%;height:300px;font-family:monospace;padding:0.5em">${escapeHtml(doc.body || '')}</textarea>
+          </div>
+          <div style="display:flex;gap:1em;justify-content:flex-end">
+            <button onclick="this.closest('div').parentElement.remove()" class="btn">Cancel</button>
+            <button onclick="saveDocument('${escapeHtml(docId)}')" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    async function saveDocument(docId) {
+      const doc = {
+        title: document.getElementById('edit-title').value,
+        body: document.getElementById('edit-body').value,
+        visibility: document.getElementById('edit-visibility').value
+      };
+
+      try {
+        const response = await fetch(API_BASE + '/' + encodeURIComponent(docId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc)
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || `HTTP ${response.status}`);
+        }
+
+        // Close modal and reload
+        document.querySelector('[style*="position:fixed"]').remove();
+        loadDocuments();
+      } catch (error) {
+        alert('Failed to save: ' + error.message);
+      }
+    }
+
+    async function deleteDocument(docId) {
+      if (!confirm(`Delete "${docId}"? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(API_BASE + '/' + encodeURIComponent(docId), {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || `HTTP ${response.status}`);
+        }
+
+        // Reload list
+        loadDocuments();
+
+      } catch (error) {
+        console.error('[wiki-admin] Delete error:', error);
+        alert('Failed to delete: ' + error.message);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Load on page load
+    loadDocuments();
+  </script>
+</body>
+</html>

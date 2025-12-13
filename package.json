@@ -1,0 +1,24 @@
+{
+  "name": "@epistery/wiki",
+  "version": "0.1.0",
+  "description": "Decentralized wiki with IPFS storage and epistery authentication",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "epistery": "^1.2.7",
+    "express": "^4.18.2",
+    "marked": "^12.0.0"
+  },
+  "keywords": [
+    "epistery",
+    "wiki",
+    "ipfs",
+    "decentralized"
+  ],
+  "author": "Epistery",
+  "license": "MIT"
+}
