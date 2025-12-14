@@ -9,6 +9,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.621.0",
     "epistery": "^1.2.7",
     "express": "^4.18.2",
     "marked": "^12.0.2",
