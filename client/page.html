@@ -1,205 +1,510 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wiki</title>
+  <link rel="stylesheet" href="/style/static.css">
+  <script src="/script/common.js"></script>
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f9f9f9;
-    }
     .wiki-container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 2em;
+      display: flex;
+      flex: 1;
+      overflow: hidden;
     }
-    .wiki-header {
+
+    .wiki-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+    }
+
+    .wiki-header-bar {
+      flex-shrink: 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1em;
-      padding-bottom: 1em;
-      border-bottom: 1px solid #ddd;
+      padding: var(--spacer) var(--spacer2);
+      border-bottom: 1px solid var(--page-border);
+      background: var(--bg-color);
     }
-    .wiki-title {
-      margin: 0;
-      font-size: 1.5em;
+
+    .wiki-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--spacer2);
     }
-    .wiki-actions {
+
+    .wiki-sidebar {
+      width: 300px;
+      flex-shrink: 0;
+      background: var(--bg-color-quiet-d);
+      border-left: 1px solid var(--page-border);
+      overflow-y: auto;
+      padding: var(--spacer2);
+    }
+    .wiki-header-actions {
       display: flex;
-      gap: 0.5em;
+      gap: var(--spacerhalf);
+      align-items: center;
     }
+
     .btn {
-      padding: 0.5em 1em;
-      border: 1px solid #ccc;
+      padding: var(--spacerhalf) var(--spacer);
+      border: 1px solid var(--page-border);
       border-radius: 4px;
-      background: white;
+      background: var(--bg-color);
       cursor: pointer;
       text-decoration: none;
-      color: #333;
+      color: var(--text-color);
       font-size: 0.875em;
     }
+
     .btn:hover {
-      background: #f0f0f0;
+      background: var(--bg-color-d);
     }
+
     .btn-primary {
-      background: #0066cc;
+      background: var(--rust-mid);
       color: white;
-      border-color: #0066cc;
+      border-color: var(--rust-mid);
     }
+
     .btn-primary:hover {
-      background: #0055aa;
+      background: var(--rust-deep);
     }
+
     .wiki-content {
-      background: white;
-      padding: 2em;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      line-height: 1.6;
+      max-width: 800px;
+      line-height: 1.7;
+      color: var(--text-color);
     }
+
+    .wiki-content h1,
+    .wiki-content h2,
+    .wiki-content h3 {
+      margin-top: var(--spacer2);
+      margin-bottom: var(--spacer);
+      color: var(--text-color-d);
+    }
+
     .wiki-content h1:first-child {
       margin-top: 0;
     }
-    .wiki-content a {
-      color: #0066cc;
+
+    .wiki-content p {
+      margin-bottom: var(--spacer);
     }
+
+    .wiki-content a {
+      color: var(--rust-mid);
+      text-decoration: none;
+    }
+
+    .wiki-content a:hover {
+      color: var(--rust-deep);
+      text-decoration: underline;
+    }
+
     .wiki-content pre {
-      background: #f5f5f5;
-      padding: 1em;
+      background: var(--bg-color-quiet-d);
+      padding: var(--spacer);
       overflow-x: auto;
       border-radius: 4px;
+      margin: var(--spacer) 0;
     }
+
     .wiki-content code {
-      background: #f5f5f5;
+      background: var(--bg-color-quiet-d);
       padding: 0.2em 0.4em;
       border-radius: 3px;
       font-size: 0.9em;
+      font-family: 'Courier New', monospace;
     }
+
     .wiki-content pre code {
       background: none;
       padding: 0;
     }
+
     .wiki-meta {
-      margin-top: 2em;
-      padding-top: 1em;
-      border-top: 1px solid #eee;
+      margin-top: var(--spacer2);
+      padding-top: var(--spacer);
+      border-top: 1px solid var(--page-border);
       font-size: 0.875em;
-      color: #666;
+      color: var(--text-color-quiet);
     }
-    .wiki-nav {
-      margin-bottom: 1em;
-      font-size: 0.875em;
+
+    .wiki-breadcrumb {
+      font-size: 0.9em;
+      color: var(--text-color-quiet);
+      display: flex;
+      align-items: center;
+      gap: var(--spacerhalf);
+      flex: 1;
     }
-    .wiki-nav a {
-      color: #666;
+
+    .wiki-breadcrumb a {
+      color: var(--text-color-quiet);
       text-decoration: none;
     }
-    .wiki-nav a:hover {
-      color: #0066cc;
+
+    .wiki-breadcrumb a:hover {
+      color: var(--rust-mid);
+      text-decoration: underline;
+    }
+
+    .wiki-breadcrumb-sep {
+      color: var(--text-color-quiet);
     }
     /* Editor styles */
     .wiki-editor {
       display: none;
     }
+
     .wiki-editor.active {
       display: block;
     }
+
     .wiki-viewer.hidden {
       display: none;
     }
+
     .wiki-editor textarea {
       width: 100%;
-      min-height: 400px;
-      padding: 1em;
-      font-family: monospace;
+      min-height: 500px;
+      padding: var(--spacer);
+      font-family: 'Courier New', monospace;
       font-size: 14px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--page-border);
       border-radius: 4px;
       resize: vertical;
+      background: var(--bg-color);
+      color: var(--text-color);
     }
+
     .wiki-editor-toolbar {
       display: flex;
-      gap: 1em;
-      margin-bottom: 1em;
+      gap: var(--spacer);
+      margin-bottom: var(--spacer);
       align-items: center;
     }
+
+    .wiki-editor-toolbar input,
+    .wiki-editor-toolbar select {
+      padding: var(--spacerhalf);
+      font-size: 1em;
+      border: 1px solid var(--page-border);
+      border-radius: 4px;
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
     .wiki-editor-toolbar input {
       flex: 1;
-      padding: 0.5em;
-      font-size: 1em;
-      border: 1px solid #ccc;
-      border-radius: 4px;
     }
+
     .error {
       background: #ffe6e6;
-      color: #cc0000;
-      padding: 1em;
+      color: var(--status-error);
+      padding: var(--spacer);
       border-radius: 4px;
-      margin-bottom: 1em;
+      margin-bottom: var(--spacer);
+      border: 1px solid var(--status-error);
     }
+
     .loading {
       text-align: center;
-      padding: 2em;
-      color: #666;
+      padding: var(--spacer2);
+      color: var(--text-color-quiet);
+    }
+
+    /* Sidebar index */
+    .wiki-index ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .wiki-index li {
+      margin: 0;
+      padding: 0;
+    }
+
+    .wiki-index-item {
+      display: flex;
+      align-items: center;
+      padding: var(--spacerthird) 0;
+    }
+
+    .wiki-index-toggle {
+      width: 20px;
+      height: 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      margin-right: var(--spacerthird);
+      font-size: 0.75em;
+      color: var(--text-color-quiet);
+      flex-shrink: 0;
+    }
+
+    .wiki-index-toggle:hover {
+      color: var(--rust-mid);
+    }
+
+    .wiki-index-toggle.empty {
+      visibility: hidden;
+    }
+
+    .wiki-index-link {
+      color: var(--text-color);
+      text-decoration: none;
+      flex: 1;
+      padding: var(--spacerthird) var(--spacerhalf);
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    .wiki-index-link:hover {
+      background: var(--bg-color-d);
+      color: var(--rust-mid);
+    }
+
+    .wiki-index-link.active {
+      background: var(--rust-light);
+      color: white;
+      font-weight: 500;
+    }
+
+    .wiki-index-children {
+      margin-left: var(--spacer3);
+      padding-left: var(--spacerhalf);
+      border-left: 1px solid var(--page-border);
+      display: none;
+    }
+
+    .wiki-index-children.expanded {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <div class="wiki-container">
-    <div class="wiki-nav">
-      <a href="?">Home</a> |
-      <a href="?doc=_index">Index</a> |
-      <a href="admin">Admin</a>
-    </div>
+<header>
+  <nav>
+    <a href="/?home" class="logo">
+      <img alt="logo" src="/image/epistery-logo-32.svg" class="logo-window">
+    </a>
+    <div class="nav-menu" id="nav-menu"></div>
+  </nav>
+</header>
 
-    <div id="error" class="error" style="display: none;"></div>
-
-    <div id="loading" class="loading">Loading...</div>
-
-    <div id="viewer" class="wiki-viewer" style="display: none;">
-      <div class="wiki-header">
-        <h1 class="wiki-title" id="doc-title"></h1>
-        <div class="wiki-actions">
-          <button class="btn btn-primary" id="edit-btn" style="display: none;">Edit</button>
+<main class="wiki-container">
+  <div class="wiki-main">
+      <div class="wiki-header-bar">
+        <div id="breadcrumb" class="wiki-breadcrumb"></div>
+        <div class="wiki-header-actions">
+          <button class="btn btn-primary" id="edit-btn-header" style="display: none;">Edit</button>
+          <a href="/agent/epistery/wiki/admin" class="btn">Admin</a>
         </div>
       </div>
-      <div class="wiki-content" id="doc-content"></div>
-      <div class="wiki-meta" id="doc-meta"></div>
-    </div>
 
-    <div id="editor" class="wiki-editor">
-      <div class="wiki-header">
-        <h1 class="wiki-title">Editing: <span id="edit-doc-id"></span></h1>
-        <div class="wiki-actions">
-          <button class="btn" id="cancel-btn">Cancel</button>
-          <button class="btn btn-primary" id="save-btn">Save</button>
+      <div class="wiki-body">
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="loading" class="loading">Loading...</div>
+
+        <div id="viewer" class="wiki-viewer" style="display: none;">
+          <div class="wiki-content" id="doc-content"></div>
+          <div class="wiki-meta" id="doc-meta"></div>
+        </div>
+
+        <div id="editor" class="wiki-editor">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacer2);">
+            <h2>Editing: <span id="edit-doc-id"></span></h2>
+            <div style="display: flex; gap: var(--spacerhalf);">
+              <button class="btn" id="cancel-btn">Cancel</button>
+              <button class="btn btn-primary" id="save-btn">Save</button>
+            </div>
+          </div>
+          <div class="wiki-editor-toolbar">
+            <input type="text" id="edit-title" placeholder="Document title">
+            <select id="edit-parent">
+              <option value="">(Root level)</option>
+            </select>
+            <select id="edit-visibility">
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+          <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
         </div>
       </div>
-      <div class="wiki-editor-toolbar">
-        <input type="text" id="edit-title" placeholder="Document title">
-        <select id="edit-visibility">
-          <option value="public">Public</option>
-          <option value="private">Private</option>
-        </select>
-      </div>
-      <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
     </div>
-  </div>
+
+    <div class="wiki-sidebar">
+      <div class="wiki-index">
+        <div id="index-tree"></div>
+      </div>
+    </div>
+  </main>
 
   <script type="module">
     const API_BASE = '/agent/epistery/wiki';
 
     let currentDoc = null;
     let canEdit = false;
+    let markupRenderer = null;
+    let allDocs = [];
 
-    // Get doc ID from URL
+    // Initialize MarkUp renderer
+    async function initMarkup() {
+      if (!markupRenderer) {
+        const MarkUp = await import(`${API_BASE}/MarkUp.mjs`).then(m => m.default);
+        markupRenderer = new MarkUp({ basePath: API_BASE });
+        await markupRenderer.init();
+      }
+      return markupRenderer;
+    }
+
+    // Get doc ID from URL path
     function getDocId() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('doc') || 'Home';
+      const path = window.location.pathname;
+      const match = path.match(/\/agent\/epistery\/wiki\/(.+)/);
+      return match ? decodeURIComponent(match[1]) : 'Home';
+    }
+
+    // Build and render the index tree
+    function renderIndexTree() {
+      const currentDocId = getDocId();
+
+      // Build parent-child map: map parent ID to list of children
+      const childrenMap = new Map();
+
+      allDocs.forEach(doc => {
+        const parentId = doc._pid || '';
+        if (!childrenMap.has(parentId)) {
+          childrenMap.set(parentId, []);
+        }
+        childrenMap.get(parentId).push(doc);
+      });
+
+      // Start with Home at the root, or all root docs if Home doesn't exist
+      const home = allDocs.find(d => d._id === 'Home');
+      const rootDocs = home ? [home] : (childrenMap.get('') || []);
+
+      // Render tree recursively
+      function renderNode(doc) {
+        const children = childrenMap.get(doc._id) || [];
+        const hasChildren = children.length > 0;
+        const isActive = doc._id === currentDocId;
+
+        const li = document.createElement('li');
+
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'wiki-index-item';
+
+        // Toggle button
+        const toggle = document.createElement('button');
+        toggle.className = 'wiki-index-toggle' + (hasChildren ? '' : ' empty');
+        toggle.textContent = hasChildren ? '▶' : '';
+        toggle.setAttribute('aria-label', 'Toggle children');
+
+        // Link
+        const link = document.createElement('a');
+        link.href = API_BASE + '/' + encodeURIComponent(doc._id);
+        link.className = 'wiki-index-link' + (isActive ? ' active' : '');
+        link.textContent = doc.title || doc._id;
+
+        itemDiv.appendChild(toggle);
+        itemDiv.appendChild(link);
+        li.appendChild(itemDiv);
+
+        // Children container
+        if (hasChildren) {
+          const childrenUl = document.createElement('ul');
+          childrenUl.className = 'wiki-index-children';
+
+          // Auto-expand Home by default
+          if (doc._id === 'Home') {
+            childrenUl.classList.add('expanded');
+            toggle.textContent = '▼';
+          }
+
+          children
+            .sort((a, b) => (a.title || a._id).localeCompare(b.title || b._id))
+            .forEach(child => {
+              childrenUl.appendChild(renderNode(child));
+            });
+
+          li.appendChild(childrenUl);
+
+          // Toggle handler
+          toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isExpanded = childrenUl.classList.toggle('expanded');
+            toggle.textContent = isExpanded ? '▼' : '▶';
+          });
+        }
+
+        return li;
+      }
+
+      const tree = document.createElement('ul');
+      rootDocs
+        .sort((a, b) => (a.title || a._id).localeCompare(b.title || b._id))
+        .forEach(doc => {
+          tree.appendChild(renderNode(doc));
+        });
+
+      document.getElementById('index-tree').innerHTML = '';
+      document.getElementById('index-tree').appendChild(tree);
+
+      // Auto-expand to show current document (in addition to Home)
+      expandToDocument(currentDocId);
+    }
+
+    // Expand tree to show a specific document
+    function expandToDocument(docId) {
+      const doc = allDocs.find(d => d._id === docId);
+      if (!doc) return;
+
+      // Build path to root
+      const path = [docId];
+      let current = doc;
+      while (current._pid) {
+        path.unshift(current._pid);
+        current = allDocs.find(d => d._id === current._pid);
+        if (!current) break;
+      }
+
+      // Expand all parents
+      path.forEach(id => {
+        const link = document.querySelector(`.wiki-index-link[href="${API_BASE}/${encodeURIComponent(id)}"]`);
+        if (link) {
+          const item = link.closest('li');
+          const childrenUl = item?.querySelector('.wiki-index-children');
+          const toggle = item?.querySelector('.wiki-index-toggle');
+          if (childrenUl && toggle) {
+            childrenUl.classList.add('expanded');
+            toggle.textContent = '▼';
+          }
+        }
+      });
+    }
+
+    // Load index data
+    async function loadIndexData() {
+      try {
+        const response = await fetch(`${API_BASE}/index`);
+        allDocs = await response.json();
+        renderIndexTree();
+      } catch (error) {
+        console.error('[wiki] Failed to load index:', error);
+      }
     }
 
     // Load and display document
@@ -209,12 +514,6 @@
       document.getElementById('editor').classList.remove('active');
       document.getElementById('error').style.display = 'none';
 
-      // Special case: index
-      if (docId === '_index') {
-        await loadIndex();
-        return;
-      }
-
       try {
         const response = await fetch(`${API_BASE}/${encodeURIComponent(docId)}`, {
           headers: { 'Accept': 'application/json' }
@@ -223,7 +522,16 @@
         if (!response.ok) {
           if (response.status === 404) {
             // New document - show editor
-            currentDoc = { _id: docId, title: docId, body: `# ${docId}\n`, visibility: 'public', _new: true };
+            // Default parent to the current document we're navigating from
+            const defaultParent = currentDoc ? currentDoc._id : '';
+            currentDoc = {
+              _id: docId,
+              title: docId,
+              body: `# ${docId}\n`,
+              _pid: defaultParent,
+              visibility: 'public',
+              _new: true
+            };
             showEditor();
             return;
           }
@@ -238,28 +546,47 @@
       }
     }
 
-    // Load index
-    async function loadIndex() {
-      try {
-        const response = await fetch(`${API_BASE}/index`);
-        const docs = await response.json();
+    // Build breadcrumb trail
+    function renderBreadcrumb() {
+      const breadcrumb = document.getElementById('breadcrumb');
 
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('viewer').style.display = 'block';
-        document.getElementById('doc-title').textContent = 'Document Index';
-        document.getElementById('edit-btn').style.display = 'none';
-
-        const html = '<ul>' + docs
-          .filter(d => d.listed !== false)
-          .map(d => `<li><a href="?doc=${encodeURIComponent(d._id)}">${escapeHtml(d.title || d._id)}</a></li>`)
-          .join('') + '</ul>';
-
-        document.getElementById('doc-content').innerHTML = html;
-        document.getElementById('doc-meta').innerHTML = `${docs.length} documents`;
-
-      } catch (error) {
-        showError(error.message);
+      if (!currentDoc) {
+        breadcrumb.innerHTML = '';
+        return;
       }
+
+      // Build path from current doc to root
+      const path = [currentDoc];
+      const visited = new Set([currentDoc._id]);
+
+      // Walk up the parent chain using the index data
+      let parentId = currentDoc._pid;
+      while (parentId && parentId !== '' && !visited.has(parentId)) {
+        const parent = allDocs.find(d => d._id === parentId);
+        if (!parent) break;
+
+        path.unshift(parent);
+        visited.add(parent._id);
+        parentId = parent._pid;
+      }
+
+      // Always prepend Home if we're not already on Home and Home exists
+      const home = allDocs.find(d => d._id === 'Home');
+      if (currentDoc._id !== 'Home' && home && path[0]._id !== 'Home') {
+        path.unshift(home);
+      }
+
+      // Render breadcrumb
+      const parts = path.map((doc, i) => {
+        if (i === path.length - 1) {
+          // Last item (current page) - no link
+          return `<span>${escapeHtml(doc.title || doc._id)}</span>`;
+        } else {
+          return `<a href="${API_BASE}/${encodeURIComponent(doc._id)}">${escapeHtml(doc.title || doc._id)}</a>`;
+        }
+      });
+
+      breadcrumb.innerHTML = parts.join(' <span class="wiki-breadcrumb-sep">/</span> ');
     }
 
     // Render document
@@ -267,12 +594,20 @@
       document.getElementById('loading').style.display = 'none';
       document.getElementById('viewer').style.display = 'block';
 
-      document.getElementById('doc-title').textContent = currentDoc.title || currentDoc._id;
+      // Render breadcrumb
+      renderBreadcrumb();
 
-      // Render markdown
-      const { marked } = await import('https://cdn.jsdelivr.net/npm/marked@12.0.0/lib/marked.esm.js');
-      const html = await marked.parse(currentDoc.body || '');
-      document.getElementById('doc-content').innerHTML = html;
+      // Update index tree to highlight current doc
+      renderIndexTree();
+
+      // Render markdown with WikiWord processing
+      const markup = await initMarkup();
+      const html = await markup.render(currentDoc.body || '', { _pid: currentDoc._pid });
+      const contentEl = document.getElementById('doc-content');
+      contentEl.innerHTML = html;
+
+      // Post-process for Mermaid diagrams
+      await markup.renderMermaidDiagrams(contentEl);
 
       // Meta
       let meta = [];
@@ -285,17 +620,10 @@
       document.getElementById('doc-meta').innerHTML = meta.join(' | ');
 
       // Check if user can edit (try a HEAD or just show button and let save fail)
-      document.getElementById('edit-btn').style.display = 'block';
+      document.getElementById('edit-btn-header').style.display = 'inline-block';
       canEdit = true;
 
-      // Process wiki links
-      document.getElementById('doc-content').querySelectorAll('a').forEach(a => {
-        const href = a.getAttribute('href');
-        if (href && href.startsWith('/wiki/')) {
-          const docId = href.replace('/wiki/', '');
-          a.href = '?doc=' + encodeURIComponent(docId);
-        }
-      });
+      // Wiki links already use the correct path format from MarkUp renderer
     }
 
     // Show editor
@@ -309,6 +637,26 @@
       document.getElementById('edit-title').value = currentDoc.title || currentDoc._id;
       document.getElementById('edit-body').value = currentDoc.body || '';
       document.getElementById('edit-visibility').value = currentDoc.visibility || 'public';
+
+      // Populate parent dropdown
+      const parentSelect = document.getElementById('edit-parent');
+      const rootOption = document.createElement('option');
+      rootOption.value = '';
+      rootOption.textContent = '(Root level)';
+      rootOption.selected = !currentDoc._pid || currentDoc._pid === '';
+      parentSelect.innerHTML = '';
+      parentSelect.appendChild(rootOption);
+
+      allDocs
+        .filter(d => d._id !== currentDoc._id) // Don't allow setting self as parent
+        .sort((a, b) => (a.title || a._id).localeCompare(b.title || b._id))
+        .forEach(doc => {
+          const option = document.createElement('option');
+          option.value = doc._id;
+          option.textContent = doc.title || doc._id;
+          option.selected = doc._id === currentDoc._pid;
+          parentSelect.appendChild(option);
+        });
     }
 
     // Hide editor
@@ -323,6 +671,7 @@
       const doc = {
         title: document.getElementById('edit-title').value,
         body: document.getElementById('edit-body').value,
+        _pid: document.getElementById('edit-parent').value,
         visibility: document.getElementById('edit-visibility').value
       };
 
@@ -341,6 +690,9 @@
         currentDoc = await response.json();
         hideEditor();
         await renderDocument();
+
+        // Reload index to reflect new document
+        await loadIndexData();
 
       } catch (error) {
         showError('Save failed: ' + error.message);
@@ -362,10 +714,10 @@
     }
 
     // Event listeners
-    document.getElementById('edit-btn').addEventListener('click', showEditor);
+    document.getElementById('edit-btn-header').addEventListener('click', showEditor);
     document.getElementById('cancel-btn').addEventListener('click', () => {
       if (currentDoc._new) {
-        window.location.href = '?';
+        window.location.href = API_BASE + '/Home';
       } else {
         hideEditor();
       }
@@ -373,7 +725,10 @@
     document.getElementById('save-btn').addEventListener('click', saveDocument);
 
     // Initial load
-    loadDocument(getDocId());
+    (async () => {
+      await loadIndexData();
+      await loadDocument(getDocId());
+    })();
   </script>
 </body>
 </html>

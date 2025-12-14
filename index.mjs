@@ -23,7 +23,6 @@ export default class WikiAgent {
 
     // Initialize storage immediately using epistery Config
     this.storageConfig = new Config();
-    this.storageConfig.setPath('/wiki');
     // TODO: Replace with Config.createFolder() when available
 
     // Load existing index
