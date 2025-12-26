@@ -23,6 +23,7 @@ export default class WikiAgent {
 
     // Initialize storage immediately using epistery Config
     this.storageConfig = new Config();
+    this.storageConfig.setPath('/wiki');
     // TODO: Replace with Config.createFolder() when available
 
     // Load existing index
@@ -163,8 +164,17 @@ export default class WikiAgent {
             }
           }
 
+          // Read _pid from cookie for new documents (like wiki-mixin does)
+          const pidFromCookie = req.cookies?._pid || '';
+          const options = { _pid: pidFromCookie, ...req.query };
+
           // JSON response for API clients
-          const doc = await this.get(req.wikiAuth, docId, req.query);
+          const doc = await this.get(req.wikiAuth, docId, options);
+
+          // Set cookie for next navigation (like wiki-mixin does)
+          const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+          res.cookie('_pid', docId, { expires, sameSite: 'Strict' });
+
           if (!doc) {
             return res.status(404).json({ error: 'Document not found' });
           }
@@ -398,7 +408,7 @@ export default class WikiAgent {
     const meta = this.index.get(docId);
 
     if (!meta) {
-      // Return empty document template for new pages
+      // Document doesn't exist - return template with _pid from cookie (like wiki-mixin)
       return {
         _id: docId,
         title: docId,

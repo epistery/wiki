@@ -11,7 +11,7 @@ class WikiWord {
     this.basePath = basePath;
   }
 
-  process(body, parentId = '') {
+  process(body, currentDocId = '') {
     // Match CamelCase words that aren't already in links
     // Must have at least two capital letters and be at least 3 chars
     const wikiWordRegex = /(?<![[\w])([A-Z][a-z]+(?:[A-Z][a-z]+)+)(?![\]\w])/g;

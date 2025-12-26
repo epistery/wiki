@@ -281,9 +281,9 @@
     }
 
     .wiki-index-children {
-      margin-left: var(--spacer3);
-      padding-left: var(--spacerhalf);
-      border-left: 1px solid var(--page-border);
+      margin-left: 1em;
+      padding-left: 0.5em;
+      border-left: 2px solid #ddd;
       display: none;
     }
 
@@ -392,9 +392,8 @@
         childrenMap.get(parentId).push(doc);
       });
 
-      // Start with Home at the root, or all root docs if Home doesn't exist
-      const home = allDocs.find(d => d._id === 'Home');
-      const rootDocs = home ? [home] : (childrenMap.get('') || []);
+      // Get all root documents (those with _pid === '' or no _pid)
+      const rootDocs = childrenMap.get('') || [];
 
       // Render tree recursively
       function renderNode(doc) {
@@ -428,7 +427,7 @@
           const childrenUl = document.createElement('ul');
           childrenUl.className = 'wiki-index-children';
 
-          // Auto-expand Home by default
+          // Auto-expand Home and any ancestor of current doc
           if (doc._id === 'Home') {
             childrenUl.classList.add('expanded');
             toggle.textContent = '▼';
@@ -494,6 +493,12 @@
           }
         }
       });
+
+      // Scroll active document into view
+      const activeLink = document.querySelector('.wiki-index-link.active');
+      if (activeLink) {
+        activeLink.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
 
     // Load index data
@@ -520,25 +525,17 @@
         });
 
         if (!response.ok) {
-          if (response.status === 404) {
-            // New document - show editor
-            // Default parent to the current document we're navigating from
-            const defaultParent = currentDoc ? currentDoc._id : '';
-            currentDoc = {
-              _id: docId,
-              title: docId,
-              body: `# ${docId}\n`,
-              _pid: defaultParent,
-              visibility: 'public',
-              _new: true
-            };
-            showEditor();
-            return;
-          }
           throw new Error(`Failed to load: ${response.status}`);
         }
 
         currentDoc = await response.json();
+
+        // New document - server returns template with _new flag and _pid from cookie
+        if (currentDoc._new) {
+          showEditor();
+          return;
+        }
+
         await renderDocument();
 
       } catch (error) {
@@ -638,6 +635,11 @@
       document.getElementById('edit-body').value = currentDoc.body || '';
       document.getElementById('edit-visibility').value = currentDoc.visibility || 'public';
 
+      // Expand tree to show parent (for new documents)
+      if (currentDoc._pid) {
+        expandToDocument(currentDoc._pid);
+      }
+
       // Populate parent dropdown
       const parentSelect = document.getElementById('edit-parent');
       const rootOption = document.createElement('option');
@@ -657,6 +659,11 @@
           option.selected = doc._id === currentDoc._pid;
           parentSelect.appendChild(option);
         });
+
+      // Force the select to update its value
+      if (currentDoc._pid) {
+        parentSelect.value = currentDoc._pid;
+      }
     }
 
     // Hide editor
