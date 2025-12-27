@@ -246,50 +246,22 @@ export default class WikiAgent {
 
   /**
    * Get authenticated rivet from request
-   * Supports bot authentication and epistery session
+   * Epistery 1.3.0+ handles all authentication (session, bot, key exchange)
+   * and sets req.episteryClient
    */
   async getAuthenticatedRivet(req) {
-    // 1. Check epistery core session
+    // Epistery middleware already handles:
+    // - Session cookies (_epistery)
+    // - Bot authentication (Authorization: Bot header)
+    // - Key exchange (sets req.episteryClient)
     if (req.episteryClient && req.episteryClient.address) {
       return {
         valid: true,
         rivetAddress: req.episteryClient.address,
         publicKey: req.episteryClient.publicKey,
-        authenticated: req.episteryClient.authenticated,
+        authenticated: req.episteryClient.authenticated || true,
         authType: 'epistery'
       };
-    }
-
-    // 2. Check for Bot authentication
-    if (req.headers.authorization?.startsWith('Bot ')) {
-      try {
-        const authHeader = req.headers.authorization.substring(4);
-        const decoded = Buffer.from(authHeader, 'base64').toString('utf8');
-        const payload = JSON.parse(decoded);
-
-        const { address, signature, message } = payload;
-
-        if (!address || !signature || !message) {
-          return { valid: false, error: 'Bot auth: Missing required fields' };
-        }
-
-        // Verify the signature using ethers
-        const { ethers } = await import('ethers');
-        const recoveredAddress = ethers.utils.verifyMessage(message, signature);
-
-        if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
-          return { valid: false, error: 'Bot auth: Invalid signature' };
-        }
-
-        return {
-          valid: true,
-          rivetAddress: address,
-          authType: 'bot'
-        };
-      } catch (error) {
-        console.error('[wiki] Bot auth error:', error);
-        return { valid: false, error: `Bot auth failed: ${error.message}` };
-      }
     }
 
     // No authentication found - allow anonymous read
