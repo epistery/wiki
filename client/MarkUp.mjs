@@ -12,17 +12,35 @@ class WikiWord {
   }
 
   process(body, currentDocId = '') {
-    // Match CamelCase words that aren't already in links
-    // Must have at least two capital letters and be at least 3 chars
-    const wikiWordRegex = /(?<![[\w])([A-Z][a-z]+(?:[A-Z][a-z]+)+)(?![\]\w])/g;
+    let lines = body.split('\n');
+    let newLines = [];
+    let skipping = false;
 
-    return body.replace(wikiWordRegex, (match, word) => {
-      // Don't convert words that are part of code blocks
-      if (this.isInCodeBlock(body, body.indexOf(match))) {
-        return match;
+    for (let line of lines) {
+      if (line.match(/^[`~]{3,4}/)) {
+        skipping = !skipping;
+        if (!skipping) {  // skip a close block line
+          newLines.push(line);
+          continue;
+        }
       }
-      return `[${word}](${this.basePath}/${word})`;
-    });
+      if (!skipping) {
+        // To force a link not in camel case surround the word in brackets
+        line = line.replace(/\[([A-Za-z0-9]+)\]/g, (match, word) => {
+          return `[${word}](${this.basePath}/${word})`;
+        });
+        // Match CamelCase WikiWords, but avoid matching words already in markdown links
+        // The negative lookbehind (?<![[(]) prevents matching inside [text] or already-created [text](url)
+        line = line.replace(/(^|[^a-zA-Z0-9:_\-=.["'}{\\/[])([!A-Z][A-Z0-9]*[a-z][a-z0-9_]*[A-Z][A-Za-z0-9_]*)(?![^\[]*\])/g, (match, pre, word) => {
+          if (word.charAt(0) === '!') return pre + (word.slice(1));
+          else if (pre === "W:") return `[${word}](wikipedia.org?s=${word})`;
+          else if (pre === "G:") return `[${word}](google.com?s=${word})`;
+          else return `${pre}[${word}](${this.basePath}/${word})`;
+        });
+      }
+      newLines.push(line);
+    }
+    return newLines.join('\n');
   }
 
   isInCodeBlock(text, position) {

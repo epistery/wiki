@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Config } from 'epistery';
+import StorageFactory from './storage/StorageFactory.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,18 +19,32 @@ export default class WikiAgent {
     this.config = config;
     this.epistery = null;
     this.rootDoc = config.rootDoc || 'Home';
-    // In-memory index for document metadata (will be persisted via Config)
-    this.index = new Map();
+    // Per-domain state (keyed by domain)
+    this.domainStates = new Map();
+  }
 
-    // Initialize storage immediately using epistery Config
-    this.storageConfig = new Config();
-    this.storageConfig.setPath('/wiki');
-    // TODO: Replace with Config.createFolder() when available
+  /**
+   * Get or initialize domain state (storage and index)
+   */
+  async getDomainState(domain) {
+    if (!this.domainStates.has(domain)) {
+      const storage = await StorageFactory.create(null, domain);
+      const index = new Map();
 
-    // Load existing index
-    this.loadIndex().catch(err => {
-      console.log('[wiki] No existing index, starting fresh');
-    });
+      // Load index from storage
+      try {
+        const indexData = JSON.parse((await storage.readFile('index.json')).toString());
+        if (indexData && indexData.documents) {
+          Object.entries(indexData.documents).forEach(([k, v]) => index.set(k, v));
+          console.log(`[wiki] Loaded index with ${index.size} documents for ${domain}`);
+        }
+      } catch (error) {
+        console.log(`[wiki] No existing index for ${domain}, starting fresh`);
+      }
+
+      this.domainStates.set(domain, { storage, index });
+    }
+    return this.domainStates.get(domain);
   }
 
   /**
@@ -39,8 +54,10 @@ export default class WikiAgent {
    * @param {express.Router} router - Express router instance
    */
   attach(router) {
-    // Store epistery instance from app.locals if available
-    router.use((req, res, next) => {
+    // Domain and epistery middleware
+    router.use(async (req, res, next) => {
+      req.domain = req.hostname || 'localhost';
+      req.wikiState = await this.getDomainState(req.domain);
       if (!this.epistery && req.app.locals.epistery) {
         this.epistery = req.app.locals.epistery;
       }
@@ -120,7 +137,7 @@ export default class WikiAgent {
     // Wiki index endpoint - list all documents
     router.get('/index', async (req, res) => {
       try {
-        const index = await this.getIndex(req.wikiAuth);
+        const index = await this.getIndex(req.wikiAuth, req.wikiState);
         res.json(index);
       } catch (error) {
         console.error('[wiki] Index error:', error);
@@ -131,13 +148,13 @@ export default class WikiAgent {
     // Status endpoint
     router.get('/status', async (req, res) => {
       try {
-        const docCount = this.index.size;
+        const docCount = req.wikiState.index.size;
         res.json({
           agent: 'wiki',
           version: '0.1.0',
           documentCount: docCount,
           rootDoc: this.rootDoc,
-          storage: 'ipfs',
+          storage: req.wikiState.storage.constructor.name,
           config: this.config
         });
       } catch (error) {
@@ -169,7 +186,7 @@ export default class WikiAgent {
           const options = { _pid: pidFromCookie, ...req.query };
 
           // JSON response for API clients
-          const doc = await this.get(req.wikiAuth, docId, options);
+          const doc = await this.get(req.wikiAuth, docId, options, req.wikiState);
 
           // Set cookie for next navigation (like wiki-mixin does)
           const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -194,7 +211,7 @@ export default class WikiAgent {
             return res.status(403).json({ error: 'Write permission denied' });
           }
 
-          const result = await this.put(req.wikiAuth, docId, req.query, req.body);
+          const result = await this.put(req.wikiAuth, docId, req.query, req.body, req.wikiState);
           res.json(result);
           return;
         }
@@ -210,7 +227,7 @@ export default class WikiAgent {
             return res.status(403).json({ error: 'Write permission denied' });
           }
 
-          const result = await this.delete(req.wikiAuth, docId);
+          const result = await this.delete(req.wikiAuth, docId, req.wikiState);
           res.json(result);
           return;
         }
@@ -338,38 +355,15 @@ export default class WikiAgent {
   }
 
   /**
-   * Load the document index from storage
-   */
-  async loadIndex() {
-    if (!this.storageConfig) return;
-
-    try {
-      const indexData = JSON.parse(this.storageConfig.readFile('index.json').toString());
-      if (indexData && indexData.documents) {
-        this.index = new Map(Object.entries(indexData.documents));
-        console.log(`[wiki] Loaded index with ${this.index.size} documents`);
-      }
-    } catch (error) {
-      // Index doesn't exist yet - that's OK
-      console.log('[wiki] No existing index found, starting fresh');
-    }
-  }
-
-  /**
    * Save the document index to storage
    */
-  async saveIndex() {
-    if (!this.storageConfig) {
-      console.error('[wiki] Cannot save index: storage not initialized');
-      return;
-    }
-
+  async saveIndex(wikiState) {
     try {
       const indexData = {
-        documents: Object.fromEntries(this.index),
+        documents: Object.fromEntries(wikiState.index),
         updated: new Date().toISOString()
       };
-      this.storageConfig.writeFile('index.json', JSON.stringify(indexData, null, 2));
+      await wikiState.storage.writeFile('index.json', JSON.stringify(indexData, null, 2));
     } catch (error) {
       console.error('[wiki] Failed to save index:', error);
     }
@@ -378,9 +372,9 @@ export default class WikiAgent {
   /**
    * Get document index
    */
-  async getIndex(auth) {
+  async getIndex(auth, wikiState) {
     const results = [];
-    for (const [docId, meta] of this.index) {
+    for (const [docId, meta] of wikiState.index) {
       // Filter by visibility
       if (meta.visibility === 'public' ||
           (auth && auth.rivetAddress === meta.owner)) {
@@ -401,11 +395,11 @@ export default class WikiAgent {
   /**
    * Get a document by ID
    */
-  async get(auth, docId, options = {}) {
+  async get(auth, docId, options = {}, wikiState) {
     if (!docId) docId = this.rootDoc;
 
     // Check index for document metadata
-    const meta = this.index.get(docId);
+    const meta = wikiState.index.get(docId);
 
     if (!meta) {
       // Document doesn't exist - return template with _pid from cookie (like wiki-mixin)
@@ -431,9 +425,9 @@ export default class WikiAgent {
       }
     }
 
-    // Load document content from IPFS/data wallet
+    // Load document content from storage
     try {
-      const content = await this.loadDocument(docId, meta);
+      const content = await this.loadDocument(docId, wikiState);
       return {
         _id: docId,
         ...meta,
@@ -448,12 +442,12 @@ export default class WikiAgent {
   /**
    * Create or update a document
    */
-  async put(auth, docId, options = {}, body = {}) {
+  async put(auth, docId, options = {}, body = {}, wikiState) {
     if (!docId) throw new Error('Document ID is required');
     if (!auth || !auth.valid) throw new Error('Authentication required');
 
     const now = new Date().toISOString();
-    const existingMeta = this.index.get(docId);
+    const existingMeta = wikiState.index.get(docId);
 
     // Prepare document
     const doc = {
@@ -481,7 +475,7 @@ export default class WikiAgent {
     }
 
     // Save document content to storage
-    await this.saveDocument(docId, doc);
+    await this.saveDocument(docId, doc, wikiState);
 
     // Update index
     const meta = {
@@ -496,8 +490,8 @@ export default class WikiAgent {
       _modified: doc._modified,
       _modifiedBy: doc._modifiedBy
     };
-    this.index.set(docId, meta);
-    await this.saveIndex();
+    wikiState.index.set(docId, meta);
+    await this.saveIndex(wikiState);
 
     console.log(`[wiki] Document saved: ${docId}`);
     return doc;
@@ -506,11 +500,11 @@ export default class WikiAgent {
   /**
    * Delete a document
    */
-  async delete(auth, docId) {
+  async delete(auth, docId, wikiState) {
     if (!docId) throw new Error('Document ID is required');
     if (!auth || !auth.valid) throw new Error('Authentication required');
 
-    const meta = this.index.get(docId);
+    const meta = wikiState.index.get(docId);
     if (!meta) {
       throw new Error('Document not found');
     }
@@ -524,10 +518,9 @@ export default class WikiAgent {
     }
 
     // Remove from index
-    this.index.delete(docId);
-    await this.saveIndex();
+    wikiState.index.delete(docId);
+    await this.saveIndex(wikiState);
 
-    // Note: IPFS content is immutable - we just remove the reference
     console.log(`[wiki] Document deleted: ${docId}`);
     return { success: true, docId };
   }
@@ -535,14 +528,10 @@ export default class WikiAgent {
   /**
    * Load document content from storage
    */
-  async loadDocument(docId, meta) {
-    if (!this.storageConfig) {
-      throw new Error('Storage not initialized');
-    }
-
+  async loadDocument(docId, wikiState) {
     try {
       const filename = `doc_${this.sanitizeFilename(docId)}.json`;
-      const content = JSON.parse(this.storageConfig.readFile(filename).toString());
+      const content = JSON.parse((await wikiState.storage.readFile(filename)).toString());
       return content;
     } catch (error) {
       throw new Error('Document not found');
@@ -552,11 +541,7 @@ export default class WikiAgent {
   /**
    * Save document content to storage
    */
-  async saveDocument(docId, doc) {
-    if (!this.storageConfig) {
-      throw new Error('Storage not initialized');
-    }
-
+  async saveDocument(docId, doc, wikiState) {
     const content = {
       title: doc.title,
       body: doc.body,
@@ -564,7 +549,7 @@ export default class WikiAgent {
     };
 
     const filename = `doc_${this.sanitizeFilename(docId)}.json`;
-    this.storageConfig.writeFile(filename, JSON.stringify(content, null, 2));
+    await wikiState.storage.writeFile(filename, JSON.stringify(content, null, 2));
     return docId;
   }
 
@@ -579,6 +564,9 @@ export default class WikiAgent {
    * Cleanup on shutdown
    */
   async cleanup() {
-    await this.saveIndex();
+    // Save all domain states
+    for (const [domain, state] of this.domainStates) {
+      await this.saveIndex(state);
+    }
   }
 }

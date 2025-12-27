@@ -386,6 +386,13 @@
 
       allDocs.forEach(doc => {
         const parentId = doc._pid || '';
+
+        // Prevent self-reference: a doc cannot be its own parent
+        if (parentId === doc._id) {
+          console.warn(`[wiki] Document ${doc._id} has circular _pid reference (points to itself)`);
+          return; // Skip this doc - treat as root
+        }
+
         if (!childrenMap.has(parentId)) {
           childrenMap.set(parentId, []);
         }
@@ -395,8 +402,14 @@
       // Get all root documents (those with _pid === '' or no _pid)
       const rootDocs = childrenMap.get('') || [];
 
-      // Render tree recursively
-      function renderNode(doc) {
+      // Render tree recursively with cycle detection
+      function renderNode(doc, ancestors = new Set()) {
+        // Detect cycles: if this doc is already in our ancestor chain, skip it
+        if (ancestors.has(doc._id)) {
+          console.warn(`[wiki] Circular reference detected in tree for ${doc._id}`);
+          return null;
+        }
+
         const children = childrenMap.get(doc._id) || [];
         const hasChildren = children.length > 0;
         const isActive = doc._id === currentDocId;
@@ -433,10 +446,17 @@
             toggle.textContent = '▼';
           }
 
+          // Create new ancestor set for children
+          const childAncestors = new Set(ancestors);
+          childAncestors.add(doc._id);
+
           children
             .sort((a, b) => (a.title || a._id).localeCompare(b.title || b._id))
             .forEach(child => {
-              childrenUl.appendChild(renderNode(child));
+              const childNode = renderNode(child, childAncestors);
+              if (childNode) {
+                childrenUl.appendChild(childNode);
+              }
             });
 
           li.appendChild(childrenUl);
@@ -471,11 +491,20 @@
       const doc = allDocs.find(d => d._id === docId);
       if (!doc) return;
 
-      // Build path to root
+      // Build path to root with cycle detection
       const path = [docId];
+      const visited = new Set([docId]);
       let current = doc;
-      while (current._pid) {
+
+      while (current._pid && current._pid !== '' && !visited.has(current._pid)) {
+        // Prevent self-reference
+        if (current._pid === current._id) {
+          console.warn(`[wiki] Document ${current._id} has circular _pid reference in expandToDocument`);
+          break;
+        }
+
         path.unshift(current._pid);
+        visited.add(current._pid);
         current = allDocs.find(d => d._id === current._pid);
         if (!current) break;
       }
@@ -558,6 +587,13 @@
 
       // Walk up the parent chain using the index data
       let parentId = currentDoc._pid;
+
+      // Prevent self-reference causing infinite loop
+      if (parentId === currentDoc._id) {
+        console.warn(`[wiki] Document ${currentDoc._id} has circular _pid reference (points to itself)`);
+        parentId = ''; // Break the loop
+      }
+
       while (parentId && parentId !== '' && !visited.has(parentId)) {
         const parent = allDocs.find(d => d._id === parentId);
         if (!parent) break;
@@ -565,6 +601,12 @@
         path.unshift(parent);
         visited.add(parent._id);
         parentId = parent._pid;
+
+        // Additional safety: prevent parent from pointing to itself
+        if (parentId === parent._id) {
+          console.warn(`[wiki] Document ${parent._id} has circular _pid reference (points to itself)`);
+          break;
+        }
       }
 
       // Always prepend Home if we're not already on Home and Home exists

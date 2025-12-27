@@ -7,10 +7,10 @@ import { Config } from 'epistery';
  * Stores documents under bucket/domain/ prefix
  */
 export default class StorjStorage {
-  constructor() {
+  constructor(domain = 'localhost') {
     this.client = null;
     this.bucket = null;
-    this.domain = null;
+    this.domain = domain;
     this.prefix = null;
     this.initialized = false;
   }
@@ -24,7 +24,7 @@ export default class StorjStorage {
     try {
       // Read Storj credentials from config
       const config = new Config();
-      const domainConfig = config.read('/localhost');
+      const domainConfig = config.read(`/${this.domain}`);
 
       // Get agent contract address as folder identifier
       const agentAddress = domainConfig.agent_contract_address;
@@ -32,23 +32,18 @@ export default class StorjStorage {
         throw new Error('agent_contract_address not found in config');
       }
 
-      // Read Storj credentials from environment or config
-      let accessKey = process.env.STORJ_ACCESS_KEY;
-      let secretKey = process.env.STORJ_SECRET_KEY;
-      let endpoint = process.env.STORJ_ENDPOINT;
-      let bucket = process.env.STORJ_BUCKET;
-
-      if (!accessKey || !secretKey || !endpoint || !bucket) {
-        if (domainConfig.storj) {
-          accessKey = domainConfig.storj.ACCESS_KEY || accessKey;
-          secretKey = domainConfig.storj.SECRET_KEY || secretKey;
-          endpoint = domainConfig.storj.ENDPOINT || endpoint;
-          bucket = domainConfig.storj.BUCKET || bucket;
-        }
+      // Read Storj credentials from config
+      if (!domainConfig.storj) {
+        throw new Error('Storj configuration not found in domain config');
       }
 
+      const accessKey = domainConfig.storj.ACCESS_KEY;
+      const secretKey = domainConfig.storj.SECRET_KEY;
+      const endpoint = domainConfig.storj.ENDPOINT;
+      const bucket = domainConfig.storj.BUCKET;
+
       if (!accessKey || !secretKey || !endpoint || !bucket) {
-        throw new Error('Storj credentials not found. Required: ACCESS_KEY, SECRET_KEY, ENDPOINT, BUCKET');
+        throw new Error('Storj credentials incomplete. Required: ACCESS_KEY, SECRET_KEY, ENDPOINT, BUCKET');
       }
 
       this.bucket = bucket;
