@@ -775,6 +775,16 @@
 
     // Initial load
     (async () => {
+      // Establish session via key exchange (creates _epistery cookie)
+      try {
+        const WitnessModule = await import('/lib/witness.js');
+        const Witness = WitnessModule.default;
+        await Witness.connect();
+      } catch (error) {
+        console.warn('[wiki] Session setup failed:', error.message);
+        // Continue anyway - anonymous read still works
+      }
+
       await loadIndexData();
       await loadDocument(getDocId());
     })();
