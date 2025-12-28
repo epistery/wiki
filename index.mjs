@@ -270,6 +270,8 @@ export default class WikiAgent {
 
   /**
    * Check if user can write to wiki
+   * Access: epistery::admin or epistery::editor
+   * Epistery plugin handles sponsor fallback when no admins exist
    */
   async canWrite(auth, req) {
     console.log('[wiki] canWrite check:', {
@@ -296,25 +298,19 @@ export default class WikiAgent {
       return true;
     }
 
-    // Check wiki write list or admin list
+    // Check standard epistery access lists
+    // Note: epistery.isListed() handles sponsor fallback internally
     if (this.epistery) {
       try {
-        const isWriter = await this.epistery.isListed(auth.rivetAddress, 'wiki::writers');
-        if (isWriter) {
-          console.log('[wiki] Write allowed: wiki::writers');
-          return true;
-        }
-
         const isAdmin = await this.epistery.isListed(auth.rivetAddress, 'epistery::admin');
         if (isAdmin) {
           console.log('[wiki] Write allowed: epistery::admin');
           return true;
         }
 
-        // Fallback: check sponsor
-        const sponsor = await this.epistery.getSponsor();
-        if (sponsor && auth.rivetAddress.toLowerCase() === sponsor.toLowerCase()) {
-          console.log('[wiki] Write allowed: sponsor');
+        const isEditor = await this.epistery.isListed(auth.rivetAddress, 'epistery::editor');
+        if (isEditor) {
+          console.log('[wiki] Write allowed: epistery::editor');
           return true;
         }
       } catch (error) {
@@ -322,7 +318,7 @@ export default class WikiAgent {
       }
     }
 
-    console.log('[wiki] Write denied: not on any allowed list');
+    console.log('[wiki] Write denied: not on epistery::admin or epistery::editor');
     return false;
   }
 
@@ -413,6 +409,7 @@ export default class WikiAgent {
 
   /**
    * Create or update a document
+   * Wikis are collaborative - anyone with write access can edit any document
    */
   async put(auth, docId, options = {}, body = {}, wikiState) {
     if (!docId) throw new Error('Document ID is required');
@@ -430,21 +427,15 @@ export default class WikiAgent {
       visibility: body.visibility || 'public',
       listed: body.listed !== false,
       rootmenu: body.rootmenu || false,
-      owner: existingMeta?.owner || auth.rivetAddress,
+      owner: existingMeta?.owner || auth.rivetAddress, // Track original creator
       _createdBy: existingMeta?._createdBy || auth.rivetAddress,
       _created: existingMeta?._created || now,
       _modified: now,
-      _modifiedBy: auth.rivetAddress
+      _modifiedBy: auth.rivetAddress // Track who made this edit
     };
 
-    // Check ownership for existing docs
-    if (existingMeta && existingMeta.owner !== auth.rivetAddress) {
-      // Check if user is admin
-      const isAdmin = await this.epistery?.isListed(auth.rivetAddress, 'epistery::admin');
-      if (!isAdmin) {
-        throw new Error('Cannot modify document owned by another user');
-      }
-    }
+    // No ownership check - wikis are collaborative
+    // Anyone with write access (epistery::admin or epistery::editor) can edit any document
 
     // Save document content to storage
     await this.saveDocument(docId, doc, wikiState);
@@ -465,12 +456,13 @@ export default class WikiAgent {
     wikiState.index.set(docId, meta);
     await this.saveIndex(wikiState);
 
-    console.log(`[wiki] Document saved: ${docId}`);
+    console.log(`[wiki] Document saved: ${docId} (edited by ${auth.rivetAddress})`);
     return doc;
   }
 
   /**
    * Delete a document
+   * Only epistery::admin can delete documents (more restrictive than edit)
    */
   async delete(auth, docId, wikiState) {
     if (!docId) throw new Error('Document ID is required');
@@ -481,19 +473,18 @@ export default class WikiAgent {
       throw new Error('Document not found');
     }
 
-    // Check ownership
-    if (meta.owner !== auth.rivetAddress) {
-      const isAdmin = await this.epistery?.isListed(auth.rivetAddress, 'epistery::admin');
-      if (!isAdmin) {
-        throw new Error('Cannot delete document owned by another user');
-      }
+    // Only admins can delete documents
+    // Note: epistery.isListed() handles sponsor fallback internally
+    const isAdmin = await this.epistery?.isListed(auth.rivetAddress, 'epistery::admin');
+    if (!isAdmin) {
+      throw new Error('Only epistery::admin can delete documents');
     }
 
     // Remove from index
     wikiState.index.delete(docId);
     await this.saveIndex(wikiState);
 
-    console.log(`[wiki] Document deleted: ${docId}`);
+    console.log(`[wiki] Document deleted: ${docId} (by ${auth.rivetAddress})`);
     return { success: true, docId };
   }
 
