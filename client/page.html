@@ -812,9 +812,32 @@
       sidebarBox.innerHTML = `
         <h4>🔐 Request Access</h4>
         <p>You need permission to edit this wiki.</p>
-        <button onclick="requestWikiAccess()">Request Editor Access</button>
+        <button onclick="showAccessMessageForm()">Request Editor Access</button>
       `;
     }
+
+    // Show message form for access request
+    window.showAccessMessageForm = function() {
+      const sidebarBox = document.getElementById('sidebar-access-box');
+      if (!sidebarBox) return;
+
+      sidebarBox.innerHTML = `
+        <h4>Request Editor Access</h4>
+        <p style="margin-bottom: 8px;">Enter a message for the host:</p>
+        <textarea id="access-message"
+          placeholder="e.g., I'd like to contribute to the wiki..."
+          style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--page-border); border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 8px;"></textarea>
+        <div style="display: flex; gap: 8px;">
+          <button onclick="submitWikiAccessRequest()" style="flex: 1;">Send Request</button>
+          <button onclick="showAccessRequestBox()" style="flex: 0 0 auto; padding: 8px 12px; background: var(--bg-color-d); color: var(--text-color);">Cancel</button>
+        </div>
+      `;
+
+      // Focus the textarea
+      setTimeout(() => {
+        document.getElementById('access-message')?.focus();
+      }, 0);
+    };
 
     // Hide access request box
     function hideAccessRequestBox() {
@@ -824,9 +847,12 @@
       }
     }
 
-    // Request wiki access
-    window.requestWikiAccess = async function() {
+    // Submit wiki access request
+    window.submitWikiAccessRequest = async function() {
       try {
+        const messageEl = document.getElementById('access-message');
+        const message = messageEl?.value || 'Requesting access to edit wiki pages';
+
         // Get wallet address from localStorage
         const data = localStorage.getItem('epistery');
         if (!data) {
@@ -855,7 +881,7 @@
             address,
             listName,
             agentName: 'wiki',
-            message: 'Requesting access to edit wiki pages',
+            message,
             name: ''
           })
         });
