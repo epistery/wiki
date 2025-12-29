@@ -195,6 +195,10 @@ export default class WikiAgent {
           if (!doc) {
             return res.status(404).json({ error: 'Document not found' });
           }
+
+          // Add write permission flag to response
+          doc.canEdit = req.wikiAuth ? await this.canWrite(req.wikiAuth, req) : false;
+
           res.json(doc);
           return;
         }

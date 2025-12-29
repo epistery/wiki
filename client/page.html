@@ -290,6 +290,45 @@
     .wiki-index-children.expanded {
       display: block;
     }
+
+    /* Sidebar access box */
+    #sidebar-access-box {
+      background: var(--bg-color);
+      border: 1px solid var(--page-border);
+      border-radius: 8px;
+      padding: var(--spacer2);
+      margin-bottom: var(--spacer2);
+    }
+
+    #sidebar-access-box h4 {
+      margin: 0 0 var(--spacerhalf) 0;
+      font-size: 14px;
+      color: var(--text-color);
+    }
+
+    #sidebar-access-box p {
+      margin: 0 0 var(--spacer) 0;
+      font-size: 13px;
+      color: var(--text-color-quiet);
+      line-height: 1.4;
+    }
+
+    #sidebar-access-box button {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: var(--action-color);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    #sidebar-access-box button:hover {
+      background: var(--action-color-hilite);
+    }
   </style>
 </head>
 <body>
@@ -346,6 +385,7 @@
     </div>
 
     <div class="wiki-sidebar">
+      <div id="sidebar-access-box"></div>
       <div class="wiki-index">
         <div id="index-tree"></div>
       </div>
@@ -658,9 +698,18 @@
       }
       document.getElementById('doc-meta').innerHTML = meta.join(' | ');
 
-      // Check if user can edit (try a HEAD or just show button and let save fail)
-      document.getElementById('edit-btn-header').style.display = 'inline-block';
-      canEdit = true;
+      // Check if user can edit (server tells us in the response)
+      canEdit = currentDoc.canEdit || false;
+      if (canEdit) {
+        document.getElementById('edit-btn-header').style.display = 'inline-block';
+        hideAccessRequestBox();
+      } else {
+        document.getElementById('edit-btn-header').style.display = 'none';
+        // Only show access box if user has a wallet
+        if (localStorage.getItem('epistery')) {
+          showAccessRequestBox();
+        }
+      }
 
       // Wiki links already use the correct path format from MarkUp renderer
     }
@@ -733,6 +782,13 @@
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
+
+          // Check if it's a permission error
+          if (response.status === 403) {
+            showAccessRequestBox();
+            throw new Error(error.error || 'You need permission to edit this wiki');
+          }
+
           throw new Error(error.error || `Save failed: ${response.status}`);
         }
 
@@ -747,6 +803,86 @@
         showError('Save failed: ' + error.message);
       }
     }
+
+    // Show access request box in sidebar
+    function showAccessRequestBox() {
+      const sidebarBox = document.getElementById('sidebar-access-box');
+      if (!sidebarBox) return;
+
+      sidebarBox.innerHTML = `
+        <h4>🔐 Request Access</h4>
+        <p>You need permission to edit this wiki.</p>
+        <button onclick="requestWikiAccess()">Request Editor Access</button>
+      `;
+    }
+
+    // Hide access request box
+    function hideAccessRequestBox() {
+      const sidebarBox = document.getElementById('sidebar-access-box');
+      if (sidebarBox) {
+        sidebarBox.innerHTML = '';
+      }
+    }
+
+    // Request wiki access
+    window.requestWikiAccess = async function() {
+      try {
+        // Get wallet address from localStorage
+        const data = localStorage.getItem('epistery');
+        if (!data) {
+          showError('Please create a wallet first');
+          return;
+        }
+
+        const parsed = JSON.parse(data);
+        let wallet = parsed.wallets?.[0];
+        if (wallet && wallet.wallet) {
+          wallet = wallet.wallet;
+        }
+
+        if (!wallet || !wallet.address) {
+          showError('No wallet address found');
+          return;
+        }
+
+        const address = wallet.rivetAddress || wallet.address;
+        const listName = 'epistery::editor';
+
+        const response = await fetch('/agent/epistery/white-list/request-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            listName,
+            agentName: 'wiki',
+            message: 'Requesting access to edit wiki pages',
+            name: ''
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Request failed');
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Request failed');
+        }
+
+        // Show success message
+        const sidebarBox = document.getElementById('sidebar-access-box');
+        if (sidebarBox) {
+          sidebarBox.innerHTML = `
+            <h4>✓ Request Submitted</h4>
+            <p>Your access request has been sent to the administrators.</p>
+          `;
+        }
+
+      } catch (error) {
+        showError('Failed to request access: ' + error.message);
+      }
+    };
 
     // Show error
     function showError(message) {
@@ -775,14 +911,19 @@
 
     // Initial load
     (async () => {
-      // Establish session via key exchange (creates _epistery cookie)
-      try {
-        const WitnessModule = await import('/lib/witness.js');
-        const Witness = WitnessModule.default;
-        await Witness.connect();
-      } catch (error) {
-        console.warn('[wiki] Session setup failed:', error.message);
-        // Continue anyway - anonymous read still works
+      // Check if user has a wallet before trying to establish session
+      const hasWallet = localStorage.getItem('epistery');
+
+      if (hasWallet) {
+        // Only try to establish session if wallet exists
+        try {
+          const WitnessModule = await import('/lib/witness.js');
+          const Witness = WitnessModule.default;
+          await Witness.connect();
+        } catch (error) {
+          console.warn('[wiki] Session setup failed:', error.message);
+          // Continue anyway - anonymous read still works
+        }
       }
 
       await loadIndexData();
