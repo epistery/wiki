@@ -290,18 +290,6 @@ export default class WikiAgent {
       return false;
     }
 
-    // Development mode: allow localhost
-    if (this.config.devMode) {
-      console.log('[wiki] Write allowed: devMode');
-      return true;
-    }
-
-    // Localhost auto-allow for development
-    if (req && (req.hostname === 'localhost' || req.hostname === '127.0.0.1')) {
-      console.log('[wiki] Write allowed: localhost');
-      return true;
-    }
-
     // Check standard epistery access lists
     // Note: epistery.isListed() handles sponsor fallback internally
     if (this.epistery) {

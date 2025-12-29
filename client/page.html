@@ -811,7 +811,7 @@
 
       sidebarBox.innerHTML = `
         <h4>🔐 Request Access</h4>
-        <p>You need permission to edit this wiki.</p>
+        <p>Request the host to enable this browser for editing.</p>
         <button onclick="showAccessMessageForm()">Request Editor Access</button>
       `;
     }
@@ -822,14 +822,13 @@
       if (!sidebarBox) return;
 
       sidebarBox.innerHTML = `
-        <h4>Request Editor Access</h4>
-        <p style="margin-bottom: 8px;">Enter a message for the host:</p>
+        <h4>🔐 Request Access</h4>
         <textarea id="access-message"
-          placeholder="e.g., I'd like to contribute to the wiki..."
+          placeholder="Enter a message for the host"
           style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--page-border); border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 8px;"></textarea>
         <div style="display: flex; gap: 8px;">
-          <button onclick="submitWikiAccessRequest()" style="flex: 1;">Send Request</button>
-          <button onclick="showAccessRequestBox()" style="flex: 0 0 auto; padding: 8px 12px; background: var(--bg-color-d); color: var(--text-color);">Cancel</button>
+          <button onclick="submitWikiAccessRequest()" style="flex: 1;">Send</button>
+          <button onclick="cancelWikiAccessRequest()" style="flex: 1; background: var(--bg-color-d); color: var(--text-color);">Cancel</button>
         </div>
       `;
 
@@ -845,6 +844,11 @@
       if (sidebarBox) {
         sidebarBox.innerHTML = '';
       }
+    }
+
+    // Cancel request
+    window.cancelWikiAccessRequest = function() {
+      showAccessRequestBox();
     }
 
     // Submit wiki access request
