@@ -96,7 +96,10 @@ export default class WikiAgent {
       res.sendFile(iconPath);
     });
 
-    // Serve widget (for agent box)
+    // Serve client directory statically
+    router.use('/client',express.static(path.join(__dirname, 'client')));
+
+    // Serve widget (for host agent box)
     router.get('/widget', (req, res) => {
       const widgetPath = path.join(__dirname, 'client/widget.html');
       if (!existsSync(widgetPath)) {
@@ -105,33 +108,13 @@ export default class WikiAgent {
       res.sendFile(widgetPath);
     });
 
-    // Serve admin page
+    // Serve admin page for host
     router.get('/admin', (req, res) => {
       const adminPath = path.join(__dirname, 'client/admin.html');
       if (!existsSync(adminPath)) {
         return res.status(404).send('Admin page not found');
       }
       res.sendFile(adminPath);
-    });
-
-    // Serve client.js for publishers
-    router.get('/client.js', (req, res) => {
-      const clientPath = path.join(__dirname, 'client/client.js');
-      if (!existsSync(clientPath)) {
-        return res.status(404).send('Client script not found');
-      }
-      res.set('Content-Type', 'text/javascript');
-      res.sendFile(clientPath);
-    });
-
-    // Serve MarkUp.mjs renderer
-    router.get('/MarkUp.mjs', (req, res) => {
-      const markupPath = path.join(__dirname, 'client/MarkUp.mjs');
-      if (!existsSync(markupPath)) {
-        return res.status(404).send('MarkUp module not found');
-      }
-      res.set('Content-Type', 'text/javascript');
-      res.sendFile(markupPath);
     });
 
     // Wiki index endpoint - list all documents
@@ -149,6 +132,7 @@ export default class WikiAgent {
     router.get('/status', async (req, res) => {
       try {
         const docCount = req.wikiState.index.size;
+        // this needs to be loaded from manifest, not hardcoded. Version should come from epistery-host agent manager
         res.json({
           agent: 'wiki',
           version: '0.1.0',
@@ -167,9 +151,10 @@ export default class WikiAgent {
       try {
         const method = req.method.toLowerCase();
         const docId = req.params.docId || this.rootDoc;
+        const permissions = await this.getPermissions(req.wikiAuth, req)
 
         // GET - read document (no auth required for public docs)
-        if (method === 'get') {
+        if (method === 'get' && permissions.read) {
           // Check Accept header - serve HTML for browsers, JSON for API
           const acceptsHtml = req.accepts(['html', 'json']) === 'html';
 
@@ -185,7 +170,6 @@ export default class WikiAgent {
           const pidFromCookie = req.cookies?._pid || '';
           const options = { _pid: pidFromCookie, ...req.query };
 
-          // JSON response for API clients
           const doc = await this.get(req.wikiAuth, docId, options, req.wikiState);
 
           // Set cookie for next navigation (like wiki-mixin does)
@@ -196,8 +180,8 @@ export default class WikiAgent {
             return res.status(404).json({ error: 'Document not found' });
           }
 
-          // Add write permission flag to response
-          doc.canEdit = req.wikiAuth ? await this.canWrite(req.wikiAuth, req) : false;
+          // Add write permission flag to response for display purposes
+          doc.__permissions = permissions
 
           res.json(doc);
           return;
@@ -205,38 +189,21 @@ export default class WikiAgent {
 
         // POST or PUT - create/update document (auth required)
         // Both methods accepted so "post to the wiki" works naturally
-        if (method === 'post' || method === 'put') {
-          if (!req.wikiAuth) {
-            return res.status(401).json({ error: 'Authentication required' });
-          }
-
-          const canWrite = await this.canWrite(req.wikiAuth, req);
-          if (!canWrite) {
-            return res.status(403).json({ error: 'Write permission denied' });
-          }
-
-          const result = await this.put(req.wikiAuth, docId, req.query, req.body, req.wikiState);
-          res.json(result);
+        if ((method === 'post' || method === 'put') && permissions.edit) {
+          if (!/^[A-Za-z0-9_]{3,}$/.test(docId)) return res.status(405).json({ error: 'Invalid document ID' });
+          const doc = await this.put(req.wikiAuth, docId, req.query, req.body, req.wikiState);
+          doc.__permissions = permissions
+          res.json(doc);
           return;
         }
 
         // DELETE - remove document (auth required)
-        if (method === 'delete') {
-          if (!req.wikiAuth) {
-            return res.status(401).json({ error: 'Authentication required' });
-          }
-
-          const canWrite = await this.canWrite(req.wikiAuth, req);
-          if (!canWrite) {
-            return res.status(403).json({ error: 'Write permission denied' });
-          }
-
+        if (method === 'delete' && (permissions.admin || req.wikiAuth.address === docId._createdBy)) {
           const result = await this.delete(req.wikiAuth, docId, req.wikiState);
           res.json(result);
           return;
         }
-
-        res.status(405).json({ error: 'Method not allowed' });
+        return res.status(403).json({ error: 'Permission required' });
       } catch (error) {
         console.error(`[wiki] Error on ${req.method} /${req.params.docId}:`, error);
         res.status(500).json({ error: error.message });
@@ -254,7 +221,7 @@ export default class WikiAgent {
    * and sets req.episteryClient
    */
   async getAuthenticatedRivet(req) {
-    // Epistery middleware already handles:
+    // Epistery middleware handles:
     // - Session cookies (_epistery)
     // - Bot authentication (Authorization: Bot header)
     // - Key exchange (sets req.episteryClient)
@@ -273,42 +240,22 @@ export default class WikiAgent {
   }
 
   /**
-   * Check if user can write to wiki
-   * Access: epistery::admin or epistery::editor
-   * Epistery plugin handles sponsor fallback when no admins exist
+   * return edit/admin privileges from white list
    */
-  async canWrite(auth, req) {
-    console.log('[wiki] canWrite check:', {
-      hasAuth: !!auth,
-      valid: auth?.valid,
-      address: auth?.rivetAddress,
-      authType: auth?.authType
-    });
-
-    if (!auth || !auth.valid) {
-      console.log('[wiki] Write denied: not authenticated');
-      return false;
-    }
-
-    // Check standard epistery access lists
-    // Note: epistery.isListed() handles sponsor fallback internally
-    if (this.epistery) {
-      try {
-        const isAdmin = await this.epistery.isListed(auth.rivetAddress, 'epistery::admin');
-        if (isAdmin) {
-          console.log('[wiki] Write allowed: epistery::admin');
-          return true;
+  async getPermissions(auth, req) {
+    const result = {admin:false,edit:false,read:true};
+    if (auth?.valid) {
+      if (this.epistery) {
+        try {
+          result.admin = await this.epistery.isListed(auth.rivetAddress, 'epistery::admin');
+          result.edit = result.admin || await this.epistery.isListed(auth.rivetAddress, 'epistery::editor');
+        } catch (error) {
+          console.error('[wiki] Permission check error:', error);
         }
-
-        const isEditor = await this.epistery.isListed(auth.rivetAddress, 'epistery::editor');
-        if (isEditor) {
-          console.log('[wiki] Write allowed: epistery::editor');
-          return true;
-        }
-      } catch (error) {
-        console.error('[wiki] Permission check error:', error);
       }
+      return result;
     }
+
 
     console.log('[wiki] Write denied: not on epistery::admin or epistery::editor');
     return false;
@@ -425,9 +372,6 @@ export default class WikiAgent {
       _modified: now,
       _modifiedBy: auth.rivetAddress // Track who made this edit
     };
-
-    // No ownership check - wikis are collaborative
-    // Anyone with write access (epistery::admin or epistery::editor) can edit any document
 
     // Save document content to storage
     await this.saveDocument(docId, doc, wikiState);

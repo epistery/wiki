@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wiki</title>
   <link rel="stylesheet" href="/style/static.css">
+  <link rel="stylesheet" href="/agent/epistery/wiki/client/wiki.css">
   <script src="/script/common.js"></script>
   <style>
     .wiki-container {
@@ -19,6 +20,8 @@
       flex-direction: column;
       min-width: 0;
       position: relative;
+      max-width: 800px;
+      margin: 0 auto;
     }
 
     .wiki-header-bar {
@@ -74,59 +77,6 @@
 
     .btn-primary:hover {
       background: var(--rust-deep);
-    }
-
-    .wiki-content {
-      max-width: 800px;
-      line-height: 1.7;
-      color: var(--text-color);
-    }
-
-    .wiki-content h1,
-    .wiki-content h2,
-    .wiki-content h3 {
-      margin-top: var(--spacer2);
-      margin-bottom: var(--spacer);
-      color: var(--text-color-d);
-    }
-
-    .wiki-content h1:first-child {
-      margin-top: 0;
-    }
-
-    .wiki-content p {
-      margin-bottom: var(--spacer);
-    }
-
-    .wiki-content a {
-      color: var(--rust-mid);
-      text-decoration: none;
-    }
-
-    .wiki-content a:hover {
-      color: var(--rust-deep);
-      text-decoration: underline;
-    }
-
-    .wiki-content pre {
-      background: var(--bg-color-quiet-d);
-      padding: var(--spacer);
-      overflow-x: auto;
-      border-radius: 4px;
-      margin: var(--spacer) 0;
-    }
-
-    .wiki-content code {
-      background: var(--bg-color-quiet-d);
-      padding: 0.2em 0.4em;
-      border-radius: 3px;
-      font-size: 0.9em;
-      font-family: 'Courier New', monospace;
-    }
-
-    .wiki-content pre code {
-      background: none;
-      padding: 0;
     }
 
     .wiki-meta {
@@ -347,7 +297,7 @@
         <div id="breadcrumb" class="wiki-breadcrumb"></div>
         <div class="wiki-header-actions">
           <button class="btn btn-primary" id="edit-btn-header" style="display: none;">Edit</button>
-          <a href="/agent/epistery/wiki/admin" class="btn">Admin</a>
+          <a id="admin-btn-header" href="/agent/epistery/wiki/admin" class="btn" style="display: none;">Admin</a>
         </div>
       </div>
 
@@ -396,14 +346,13 @@
     const API_BASE = '/agent/epistery/wiki';
 
     let currentDoc = null;
-    let canEdit = false;
     let markupRenderer = null;
     let allDocs = [];
 
     // Initialize MarkUp renderer
     async function initMarkup() {
       if (!markupRenderer) {
-        const MarkUp = await import(`${API_BASE}/MarkUp.mjs`).then(m => m.default);
+        const MarkUp = await import(`${API_BASE}/client/MarkUp.mjs`).then(m => m.default);
         markupRenderer = new MarkUp({ basePath: API_BASE });
         await markupRenderer.init();
       }
@@ -698,20 +647,13 @@
       }
       document.getElementById('doc-meta').innerHTML = meta.join(' | ');
 
-      // Check if user can edit (server tells us in the response)
-      canEdit = currentDoc.canEdit || false;
-      if (canEdit) {
-        document.getElementById('edit-btn-header').style.display = 'inline-block';
-        hideAccessRequestBox();
+      document.getElementById('edit-btn-header').style.display = currentDoc.__permissions.edit?'inline-block':'none';
+      document.getElementById('admin-btn-header').style.display = currentDoc.__permissions.admin?'inline-block':'none';
+      if (!currentDoc.__permissions.edit) {
+        showAccessRequestBox();
       } else {
-        document.getElementById('edit-btn-header').style.display = 'none';
-        // Only show access box if user has a wallet
-        if (localStorage.getItem('epistery')) {
-          showAccessRequestBox();
-        }
+        hideAccessRequestBox();
       }
-
-      // Wiki links already use the correct path format from MarkUp renderer
     }
 
     // Show editor

@@ -26,7 +26,7 @@ class WikiWord {
       }
       if (!skipping) {
         // To force a link not in camel case surround the word in brackets
-        line = line.replace(/\[([A-Za-z0-9]+)\]/g, (match, word) => {
+        line = line.replace(/\[([A-Za-z0-9_]+)\]/g, (match, word) => {
           return `[${word}](${this.basePath}/${word})`;
         });
         // Match CamelCase WikiWords, but avoid matching words already in markdown links

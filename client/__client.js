@@ -21,7 +21,7 @@
      */
     async init() {
       // Load MarkUp renderer
-      const MarkUp = await import(this.baseUrl + '/MarkUp.mjs').then(m => m.default);
+      const MarkUp = await import(this.baseUrl + '/client/MarkUp.mjs').then(m => m.default);
       this.markup = new MarkUp({ basePath: this.baseUrl });
       await this.markup.init();
 
