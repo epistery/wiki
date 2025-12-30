@@ -343,6 +343,7 @@
   </main>
 
   <script type="module">
+    import Witness from '/lib/witness.js'
     const API_BASE = '/agent/epistery/wiki';
 
     let currentDoc = null;
@@ -883,21 +884,7 @@
 
     // Initial load
     (async () => {
-      // Check if user has a wallet before trying to establish session
-      const hasWallet = localStorage.getItem('epistery');
-
-      if (hasWallet) {
-        // Only try to establish session if wallet exists
-        try {
-          const WitnessModule = await import('/lib/witness.js');
-          const Witness = WitnessModule.default;
-          await Witness.connect();
-        } catch (error) {
-          console.warn('[wiki] Session setup failed:', error.message);
-          // Continue anyway - anonymous read still works
-        }
-      }
-
+      const witness = await Witness.connect({rootPath:"/"});
       await loadIndexData();
       await loadDocument(getDocId());
     })();

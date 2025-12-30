@@ -256,7 +256,6 @@ export default class WikiAgent {
       return result;
     }
 
-
     console.log('[wiki] Write denied: not on epistery::admin or epistery::editor');
     return false;
   }
