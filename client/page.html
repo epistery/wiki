@@ -8,20 +8,11 @@
   <link rel="stylesheet" href="/agent/epistery/wiki/client/wiki.css">
   <script src="/script/common.js"></script>
   <style>
-    .wiki-container {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
     .wiki-main {
-      flex: 1;
       display: flex;
       flex-direction: column;
       min-width: 0;
       position: relative;
-      max-width: 800px;
-      margin: 0 auto;
     }
 
     .wiki-header-bar {
@@ -32,21 +23,19 @@
       padding: var(--spacer) var(--spacer2);
       border-bottom: 1px solid var(--page-border);
       background: var(--bg-color);
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .wiki-body-tray {
+      overflow-y:auto;
+      padding: var(--spacer2);
     }
 
     .wiki-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: var(--spacer2);
-    }
-
-    .wiki-sidebar {
-      width: 300px;
-      flex-shrink: 0;
-      background: var(--bg-color-quiet-d);
-      border-left: 1px solid var(--page-border);
-      overflow-y: auto;
-      padding: var(--spacer2);
+      max-width: 800px;
+      margin: 0 auto;
     }
     .wiki-header-actions {
       display: flex;
@@ -279,6 +268,10 @@
     #sidebar-access-box button:hover {
       background: var(--action-color-hilite);
     }
+    #modified-tag {
+      color: inherit;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -291,8 +284,8 @@
   </nav>
 </header>
 
-<main class="wiki-container">
-  <div class="wiki-main">
+<main class="console-layout">
+  <div class="console-main wiki-main">
       <div class="wiki-header-bar">
         <div id="breadcrumb" class="wiki-breadcrumb"></div>
         <div class="wiki-header-actions">
@@ -301,40 +294,42 @@
         </div>
       </div>
 
-      <div class="wiki-body">
-        <div id="error" class="error" style="display: none;"></div>
+      <div class="wiki-body-tray">
+        <div class="wiki-body">
+          <div id="error" class="error" style="display: none;"></div>
 
-        <div id="loading" class="loading">Loading...</div>
+          <div id="loading" class="loading">Loading...</div>
 
-        <div id="viewer" class="wiki-viewer" style="display: none;">
-          <div class="wiki-content" id="doc-content"></div>
-          <div class="wiki-meta" id="doc-meta"></div>
-        </div>
+          <div id="viewer" class="wiki-viewer" style="display: none;">
+            <div class="wiki-content" id="doc-content"></div>
+            <div class="wiki-meta" id="doc-meta"></div>
+          </div>
 
-        <div id="editor" class="wiki-editor">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacer2);">
-            <h2>Editing: <span id="edit-doc-id"></span></h2>
-            <div style="display: flex; gap: var(--spacerhalf);">
-              <button class="btn" id="cancel-btn">Cancel</button>
-              <button class="btn btn-primary" id="save-btn">Save</button>
+          <div id="editor" class="wiki-editor">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacer2);">
+              <h2>Editing: <span id="edit-doc-id"></span></h2>
+              <div style="display: flex; gap: var(--spacerhalf);">
+                <button class="btn" id="cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="save-btn">Save</button>
+              </div>
             </div>
+            <div class="wiki-editor-toolbar">
+              <input type="text" id="edit-title" placeholder="Document title">
+              <select id="edit-parent">
+                <option value="">(Root level)</option>
+              </select>
+              <select id="edit-visibility">
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+            <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
           </div>
-          <div class="wiki-editor-toolbar">
-            <input type="text" id="edit-title" placeholder="Document title">
-            <select id="edit-parent">
-              <option value="">(Root level)</option>
-            </select>
-            <select id="edit-visibility">
-              <option value="public">Public</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-          <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
         </div>
       </div>
     </div>
 
-    <div class="wiki-sidebar">
+    <div class="console-sidebar">
       <div id="sidebar-access-box"></div>
       <div class="wiki-index">
         <div id="index-tree"></div>
@@ -344,11 +339,13 @@
 
   <script type="module">
     import Witness from '/lib/witness.js'
+    import ZebraTime from '/lib/zebratime.js'
     const API_BASE = '/agent/epistery/wiki';
 
     let currentDoc = null;
     let markupRenderer = null;
     let allDocs = [];
+    const witness = await Witness.connect({rootPath:"/"});
 
     // Initialize MarkUp renderer
     async function initMarkup() {
@@ -641,7 +638,9 @@
       // Meta
       let meta = [];
       if (currentDoc._modified) {
-        meta.push('Modified: ' + new Date(currentDoc._modified).toLocaleString());
+        const date = new Date(currentDoc._modified);
+        const day = new Intl.DateTimeFormat('en-US').format(date)
+        meta.push(`<a title='last modified, ${date.toLocaleString()} GMT' id='modified-tag' href='https://zebratime.org'>Modified: ${day}, ${ZebraTime(date)}</a>`);
       }
       if (currentDoc.visibility && currentDoc.visibility !== 'public') {
         meta.push('Visibility: ' + currentDoc.visibility);
@@ -785,7 +784,23 @@
     function hideAccessRequestBox() {
       const sidebarBox = document.getElementById('sidebar-access-box');
       if (sidebarBox) {
-        sidebarBox.innerHTML = '';
+        let addr = witness.wallet.address;
+        const shortform = `${addr.slice(0,8)}...${addr.slice(addr.length-6)}`;
+        const span = document.createElement('SPAN')
+        span.innerHTML = shortform;
+        span.title = addr;
+        span.style = 'display:block;text-align:center;font-family:monospace;cursor:pointer;margin:-10px 0';
+        sidebarBox.innerHTML = ``
+        sidebarBox.appendChild(span);
+        span.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(addr);
+            span.innerHTML = 'copied!';
+            setTimeout(()=>{span.innerHTML = shortform},500)
+          } catch(error) {
+            console.log(error);
+          }
+        })
       }
     }
 
@@ -884,7 +899,6 @@
 
     // Initial load
     (async () => {
-      const witness = await Witness.connect({rootPath:"/"});
       await loadIndexData();
       await loadDocument(getDocId());
     })();
