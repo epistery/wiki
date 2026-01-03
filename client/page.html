@@ -124,6 +124,18 @@
       color: var(--text-color);
     }
 
+    #edit-body-ace {
+      width: 100%;
+      min-height: 500px;
+      border: 1px solid var(--page-border);
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #edit-body-ace .ace_gutter {
+      background: var(--bg-color-d);
+    }
+
     .wiki-editor-toolbar {
       display: flex;
       gap: var(--spacer);
@@ -330,7 +342,7 @@
                 <option value="private">Private</option>
               </select>
             </div>
-            <textarea id="edit-body" placeholder="Enter markdown content..."></textarea>
+            <div id="edit-body-ace"></div>
           </div>
         </div>
       </div>
@@ -352,7 +364,42 @@
     let currentDoc = null;
     let markupRenderer = null;
     let allDocs = [];
+    let aceEditor = null;
     const witness = await Witness.connect({rootPath:"/"});
+
+    // Load ACE editor from CDN
+    async function installAce() {
+      if (typeof window.ace === 'undefined') {
+        const aceScript = document.createElement('script');
+        aceScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ace.min.js';
+        document.body.appendChild(aceScript);
+        await new Promise((resolve) => {
+          aceScript.addEventListener('load', resolve);
+        });
+      }
+    }
+
+    // Initialize ACE editor for markdown
+    async function initAceEditor() {
+      await installAce();
+
+      if (!aceEditor) {
+        aceEditor = window.ace.edit('edit-body-ace');
+        aceEditor.setTheme('ace/theme/chrome');
+        aceEditor.session.setMode('ace/mode/markdown');
+        aceEditor.$blockScrolling = Infinity;
+        aceEditor.session.setUseWrapMode(true);
+        aceEditor.setOptions({
+          maxLines: Infinity,
+          minLines: 20,
+          fontSize: '14px',
+          showPrintMargin: false
+        });
+        aceEditor.renderer.setShowGutter(false);
+      }
+
+      return aceEditor;
+    }
 
     // Initialize MarkUp renderer
     async function initMarkup() {
@@ -664,7 +711,7 @@
     }
 
     // Show editor
-    function showEditor() {
+    async function showEditor() {
       document.getElementById('loading').style.display = 'none';
       document.getElementById('viewer').style.display = 'none';
       document.getElementById('viewer').classList.add('hidden');
@@ -672,8 +719,12 @@
 
       document.getElementById('edit-doc-id').textContent = currentDoc._id;
       document.getElementById('edit-title').value = currentDoc.title || currentDoc._id;
-      document.getElementById('edit-body').value = currentDoc.body || '';
       document.getElementById('edit-visibility').value = currentDoc.visibility || 'public';
+
+      // Initialize ACE editor and set content
+      await initAceEditor();
+      aceEditor.setValue(currentDoc.body || '', -1); // -1 moves cursor to start
+      aceEditor.focus();
 
       // Expand tree to show parent (for new documents)
       if (currentDoc._pid) {
@@ -717,7 +768,7 @@
     async function saveDocument() {
       const doc = {
         title: document.getElementById('edit-title').value,
-        body: document.getElementById('edit-body').value,
+        body: aceEditor ? aceEditor.getValue() : '',
         _pid: document.getElementById('edit-parent').value,
         visibility: document.getElementById('edit-visibility').value
       };
