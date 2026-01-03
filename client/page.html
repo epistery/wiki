@@ -272,6 +272,13 @@
       color: inherit;
       text-decoration: none;
     }
+
+    /* Wiki index styling when in hamburger menu */
+    #side-bar .wiki-index {
+      margin-top: var(--spacer2);
+      padding-top: var(--spacer2);
+      border-top: 1px solid var(--page-border);
+    }
   </style>
 </head>
 <body>
@@ -897,10 +904,47 @@
     });
     document.getElementById('save-btn').addEventListener('click', saveDocument);
 
+    // Move wiki index between sidebar and hamburger based on screen size
+    function moveWikiIndex() {
+      const wikiIndex = document.querySelector('.wiki-index');
+      const sideBar = document.getElementById('side-bar');
+      const consoleSidebar = document.querySelector('.console-sidebar');
+
+      if (!wikiIndex || !sideBar || !consoleSidebar) return;
+
+      const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+      const isInHamburger = sideBar.contains(wikiIndex);
+
+      if (isMobile && !isInHamburger) {
+        // Move to hamburger menu
+        sideBar.appendChild(wikiIndex);
+      } else if (!isMobile && isInHamburger) {
+        // Move back to sidebar
+        consoleSidebar.appendChild(wikiIndex);
+      }
+    }
+
+    // Wait for common.js to create the side-bar, then setup responsive behavior
+    function waitForSideBar() {
+      const sideBar = document.getElementById('side-bar');
+      if (sideBar) {
+        // Initial position
+        moveWikiIndex();
+        // Listen for resize
+        window.matchMedia('(max-width: 1024px)').addEventListener('change', moveWikiIndex);
+      } else {
+        // Check again shortly
+        setTimeout(waitForSideBar, 100);
+      }
+    }
+
     // Initial load
     (async () => {
       await loadIndexData();
       await loadDocument(getDocId());
+
+      // Setup responsive wiki index after side-bar exists
+      waitForSideBar();
     })();
   </script>
 </body>
