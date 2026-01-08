@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wiki Admin</title>
   <style>
     * { box-sizing: border-box; }
@@ -151,6 +152,11 @@
       text-align: center;
       color: #666;
     }
+    iframe {
+      width: 100%;
+      border:0;
+      height:300px;
+    }
   </style>
 </head>
 <body>
@@ -181,6 +187,10 @@
         <div class="stat-value" id="private-count">-</div>
         <div class="stat-label">Private</div>
       </div>
+    </div>
+
+    <div class="container">
+      <iframe src="/page/acl?agent=@epistery/wiki"
     </div>
 
     <div class="documents">
