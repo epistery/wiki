@@ -138,7 +138,7 @@ export default class WikiAgent {
       try {
         const method = req.method.toLowerCase();
         const docId = req.params.docId || this.rootDoc;
-        const permissions = await this.getPermissions(req.episteryClient, req)
+        const permissions = await this.getPermissions(req)
 
         // GET - read document (no auth required for public docs)
         if (method === 'get' && permissions.read) {
@@ -190,6 +190,19 @@ export default class WikiAgent {
           res.json(result);
           return;
         }
+
+        // Access denied - show friendly message for HTML requests
+        if (req.accepts(['html', 'json']) === 'html') {
+          return res.status(403).send(`
+            <!DOCTYPE html>
+            <html><head><title>Access Denied</title></head>
+            <body style="font-family: sans-serif; max-width: 600px; margin: 100px auto; text-align: center;">
+              <h1>Access Denied</h1>
+              <p>Browser address: <span style='font-family:monospace;font-weight:bold'>${req.episteryClient.address}</p>
+              <p>Access unavailable. Please contact the administrator.</p>
+            </body></html>
+          `);
+        }
         return res.status(403).json({ error: 'Permission required' });
       } catch (error) {
         console.error(`[wiki] Error on ${req.method} /${req.params.docId}:`, error);
@@ -205,17 +218,21 @@ export default class WikiAgent {
   /**
    * return edit/admin privileges from white list
    */
-  async getPermissions(episteryClient, req) {
+  async getPermissions(req) {
     const result = {admin:false,edit:false,read:true};
-    if (episteryClient) {
-      if (this.epistery) {
-        try {
-          result.admin = await this.epistery.isListed(episteryClient.address, 'epistery::admin');
-          result.edit = result.admin || await this.epistery.isListed(episteryClient.address, 'epistery::editor');
-        } catch (error) {
-          console.error('[wiki] Permission check error:', error);
-        }
-      }
+
+    // Everyone has read access by default
+    if (!req.episteryClient || !this.epistery) {
+      return result;
+    }
+
+    try {
+      const isAdmin = await this.epistery.isListed(req.episteryClient.address, 'epistery::admin');
+      result.admin = isAdmin;
+      result.edit = isAdmin;  // admins can edit
+      return result;
+    } catch (error) {
+      console.error('[wiki] ACL check error:', error);
     }
     return result;
   }

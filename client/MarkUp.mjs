@@ -15,15 +15,30 @@ class WikiWord {
     let lines = body.split('\n');
     let newLines = [];
     let skipping = false;
+    let fenceChar = null;
+    let fenceLength = 0;
 
     for (let line of lines) {
-      if (line.match(/^[`~]{3,4}/)) {
-        skipping = !skipping;
-        if (!skipping) {  // skip a close block line
-          newLines.push(line);
-          continue;
+      // Check for code fence start/end: ``` or ~~~, 3 or more chars
+      const fenceMatch = line.match(/^([`~]){3,}/);
+
+      if (fenceMatch) {
+        if (!skipping) {
+          // Starting a code block
+          skipping = true;
+          fenceChar = fenceMatch[1];
+          fenceLength = fenceMatch[0].length;
+        } else if (fenceMatch[1] === fenceChar && fenceMatch[0].length >= fenceLength) {
+          // Ending a code block - must match the opening fence char and be at least as long
+          skipping = false;
+          fenceChar = null;
+          fenceLength = 0;
         }
+        // Always push fence lines without processing
+        newLines.push(line);
+        continue;
       }
+
       if (!skipping) {
         // To force a link not in camel case surround the word in brackets
         line = line.replace(/\[([A-Za-z0-9_]+)\]/g, (match, word) => {
@@ -72,10 +87,12 @@ export default class MarkUp {
       const { marked } = await import('https://cdn.jsdelivr.net/npm/marked@12.0.0/lib/marked.esm.js');
       this.marked = marked;
 
-      // Configure marked
+      // Configure marked - allow raw HTML to pass through
       this.marked.setOptions({
         gfm: true,
-        breaks: true
+        breaks: true,
+        sanitize: false,  // Don't sanitize HTML
+        smartypants: false
       });
     }
 
@@ -124,14 +141,14 @@ export default class MarkUp {
   async render(body, options = {}) {
     await this.init();
 
-    // Process extension blocks (mermaid, frame, etc.)
-    body = await this.replaceExtensionBlocks(body, options);
-
-    // Process WikiWords
+    // Process WikiWords first (properly skips code blocks now)
     const wordified = this.wikiWord.process(body, options._pid);
 
-    // Render markdown
+    // Render markdown (this will convert ```mermaid to <pre><code class="language-mermaid">)
     let result = await this.marked.parse(wordified);
+
+    // Post-process: convert mermaid code blocks to mermaid containers
+    result = this.convertMermaidBlocks(result);
 
     // Add default styles
     result += `
@@ -149,47 +166,31 @@ export default class MarkUp {
   }
 
   /**
-   * Process extension blocks: mermaid, frame
+   * Convert mermaid code blocks to mermaid containers
+   * Processes HTML after marked.js rendering
    */
-  async replaceExtensionBlocks(body, options) {
-    const asyncBlocks = [];
+  convertMermaidBlocks(html) {
     let blockId = 0;
 
-    // Replace fenced code blocks with extensions
-    // Support both ~~~ and ``` delimiters
-    const blockRegex = /^(`{3,4}|~{3,4})(mermaid|frame)(?:\((.*?)\))?\n([\s\S]*?)\n\1/gm;
-
-    body = body.replace(blockRegex, (match, delimiter, lang, args, content) => {
-      const blockArgs = args ? args.split(',').map(a => a.trim()) : [];
-
-      if (lang === 'mermaid') {
-        // Generate placeholder for async mermaid rendering
-        const id = `mermaid-${++blockId}`;
-        asyncBlocks.push({ id, lang, content });
-        return `<div class="mermaid-container" id="${id}">${this.escapeHtml(content)}</div>`;
-      }
-
-      if (lang === 'frame') {
-        // Parse frame definitions
-        const frames = content.split('\n').filter(line => line.trim()).map(line => {
-          const frameMatch = line.match(/^(.*?)(?:\[(.*?)\])?(\/.*?)$/);
-          if (frameMatch) {
-            const [, title, style, path] = frameMatch;
-            return `<div class="frame-container ${title ? 'titled' : ''}" ${style ? `style="${style}"` : ''}>
-              ${title ? `<div class="frame-title">${title}</div>` : ''}
-              <iframe src="${path.replace(/"/g, '%22')}"></iframe>
-            </div>`;
-          }
-          return '';
-        }).join('\n');
-
-        return `<div class="frame-set">\n${frames}\n</div>`;
-      }
-
-      return match;
+    // Find <pre><code class="language-mermaid"> blocks and convert to mermaid containers
+    // marked.js converts ```mermaid to <pre><code class="language-mermaid">
+    html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, (match, content) => {
+      const id = `mermaid-${++blockId}`;
+      // Content is already HTML-encoded by marked, we need to decode it for Mermaid
+      const decoded = this.decodeHtml(content);
+      return `<div class="mermaid-container" id="${id}">${decoded}</div>`;
     });
 
-    return body;
+    return html;
+  }
+
+  /**
+   * Decode HTML entities
+   */
+  decodeHtml(html) {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    return txt.value;
   }
 
   /**

@@ -26,10 +26,10 @@ export default class StorjStorage {
       const config = new Config();
       const domainConfig = config.read(`/${this.domain}`);
 
-      // Get agent contract address as folder identifier
-      const agentAddress = domainConfig.agent_contract_address;
-      if (!agentAddress) {
-        throw new Error('agent_contract_address not found in config');
+      // Get server wallet address as folder identifier (persistent across contract upgrades)
+      const serverWallet = domainConfig.wallet?.address;
+      if (!serverWallet) {
+        throw new Error('Server wallet address not found in config');
       }
 
       // Read Storj credentials from config
@@ -47,7 +47,7 @@ export default class StorjStorage {
       }
 
       this.bucket = bucket;
-      this.prefix = `${agentAddress}/wiki/`;
+      this.prefix = `${serverWallet}/wiki/`;
 
       this.client = new S3Client({
         endpoint: endpoint,

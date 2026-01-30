@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/style/static.css">
   <link rel="stylesheet" href="/agent/epistery/wiki/client/wiki.css">
   <script src="/script/common.js"></script>
+  <script type="module" src="/script/widgets.mjs"></script>
   <style>
     .wiki-main {
       display: flex;
@@ -242,44 +243,6 @@
       display: block;
     }
 
-    /* Sidebar access box */
-    #sidebar-access-box {
-      background: var(--bg-color);
-      border: 1px solid var(--page-border);
-      border-radius: 8px;
-      padding: var(--spacer2);
-      margin-bottom: var(--spacer2);
-    }
-
-    #sidebar-access-box h4 {
-      margin: 0 0 var(--spacerhalf) 0;
-      font-size: 14px;
-      color: var(--text-color);
-    }
-
-    #sidebar-access-box p {
-      margin: 0 0 var(--spacer) 0;
-      font-size: 13px;
-      color: var(--text-color-quiet);
-      line-height: 1.4;
-    }
-
-    #sidebar-access-box button {
-      width: 100%;
-      padding: 8px 12px;
-      font-size: 13px;
-      background: var(--action-color);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-
-    #sidebar-access-box button:hover {
-      background: var(--action-color-hilite);
-    }
     #modified-tag {
       color: inherit;
       text-decoration: none;
@@ -290,6 +253,9 @@
       margin-top: var(--spacer2);
       padding-top: var(--spacer2);
       border-top: 1px solid var(--page-border);
+    }
+    .wiki-access {
+      margin-bottom: var(--spacer);
     }
   </style>
 </head>
@@ -349,7 +315,7 @@
     </div>
 
     <div class="console-sidebar">
-      <div id="sidebar-access-box"></div>
+      <div class="wiki-access" data-widget="requestAccess" data-agent="@epistery/wiki" data-list="epistery::editor"></div>
       <div class="wiki-index">
         <div id="index-tree"></div>
       </div>
@@ -703,11 +669,6 @@
 
       document.getElementById('edit-btn-header').style.display = currentDoc.__permissions.edit?'inline-block':'none';
       document.getElementById('admin-btn-header').style.display = currentDoc.__permissions.admin?'inline-block':'none';
-      if (!currentDoc.__permissions.edit) {
-        showAccessRequestBox();
-      } else {
-        hideAccessRequestBox();
-      }
     }
 
     // Show editor
@@ -785,7 +746,6 @@
 
           // Check if it's a permission error
           if (response.status === 403) {
-            showAccessRequestBox();
             throw new Error(error.error || 'You need permission to edit this wiki');
           }
 
@@ -804,131 +764,6 @@
       }
     }
 
-    // Show access request box in sidebar
-    function showAccessRequestBox() {
-      const sidebarBox = document.getElementById('sidebar-access-box');
-      if (!sidebarBox) return;
-
-      sidebarBox.innerHTML = `
-        <h4>🔐 Request Access</h4>
-        <p>Request the host to enable this browser for editing.</p>
-        <button onclick="showAccessMessageForm()">Request Editor Access</button>
-      `;
-    }
-
-    // Show message form for access request
-    window.showAccessMessageForm = function() {
-      const sidebarBox = document.getElementById('sidebar-access-box');
-      if (!sidebarBox) return;
-
-      sidebarBox.innerHTML = `
-        <h4>🔐 Request Access</h4>
-        <textarea id="access-message"
-          placeholder="Enter a message for the host"
-          style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--page-border); border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box; margin-bottom: 8px;"></textarea>
-        <div style="display: flex; gap: 8px;">
-          <button onclick="submitWikiAccessRequest()" style="flex: 1;">Send</button>
-          <button onclick="cancelWikiAccessRequest()" style="flex: 1; background: var(--bg-color-d); color: var(--text-color);">Cancel</button>
-        </div>
-      `;
-
-      // Focus the textarea
-      setTimeout(() => {
-        document.getElementById('access-message')?.focus();
-      }, 0);
-    };
-
-    // Hide access request box
-    function hideAccessRequestBox() {
-      const sidebarBox = document.getElementById('sidebar-access-box');
-      if (sidebarBox) {
-        let addr = witness.wallet.address;
-        const shortform = `${addr.slice(0,8)}...${addr.slice(addr.length-6)}`;
-        const span = document.createElement('SPAN')
-        span.innerHTML = shortform;
-        span.title = addr;
-        span.style = 'display:block;text-align:center;font-family:monospace;cursor:pointer;margin:-10px 0';
-        sidebarBox.innerHTML = ``
-        sidebarBox.appendChild(span);
-        span.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(addr);
-            span.innerHTML = 'copied!';
-            setTimeout(()=>{span.innerHTML = shortform},500)
-          } catch(error) {
-            console.log(error);
-          }
-        })
-      }
-    }
-
-    // Cancel request
-    window.cancelWikiAccessRequest = function() {
-      showAccessRequestBox();
-    }
-
-    // Submit wiki access request
-    window.submitWikiAccessRequest = async function() {
-      try {
-        const messageEl = document.getElementById('access-message');
-        const message = messageEl?.value || 'Requesting access to edit wiki pages';
-
-        // Get wallet address from localStorage
-        const data = localStorage.getItem('epistery');
-        if (!data) {
-          showError('Please create a wallet first');
-          return;
-        }
-
-        const parsed = JSON.parse(data);
-        let wallet = parsed.wallets?.[0];
-        if (wallet && wallet.wallet) {
-          wallet = wallet.wallet;
-        }
-
-        if (!wallet || !wallet.address) {
-          showError('No wallet address found');
-          return;
-        }
-
-        const address = wallet.rivetAddress || wallet.address;
-        const listName = 'epistery::editor';
-
-        const response = await fetch('/agent/epistery/white-list/request-access', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            address,
-            listName,
-            agentName: 'wiki',
-            message,
-            name: ''
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Request failed');
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-          throw new Error(result.error || 'Request failed');
-        }
-
-        // Show success message
-        const sidebarBox = document.getElementById('sidebar-access-box');
-        if (sidebarBox) {
-          sidebarBox.innerHTML = `
-            <h4>✓ Request Submitted</h4>
-            <p>Your access request has been sent to the administrators.</p>
-          `;
-        }
-
-      } catch (error) {
-        showError('Failed to request access: ' + error.message);
-      }
-    };
 
     // Show error
     function showError(message) {
