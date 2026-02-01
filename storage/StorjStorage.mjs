@@ -24,11 +24,11 @@ export default class StorjStorage {
     try {
       // Read Storj credentials from config
       const config = new Config();
-      const domainConfig = config.read(`/${this.domain}`);
+      const domainConfig = config.read(this.domain);
 
       // Get server wallet address as folder identifier (persistent across contract upgrades)
-      const serverWallet = domainConfig.wallet?.address;
-      if (!serverWallet) {
+      const serverAddress = domainConfig.contract_address;
+      if (!serverAddress) {
         throw new Error('Server wallet address not found in config');
       }
 
@@ -47,7 +47,7 @@ export default class StorjStorage {
       }
 
       this.bucket = bucket;
-      this.prefix = `${serverWallet}/wiki/`;
+      this.prefix = `${serverAddress}/wiki/`;
 
       this.client = new S3Client({
         endpoint: endpoint,
