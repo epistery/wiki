@@ -39,12 +39,55 @@ export default class WikiAgent {
           console.log(`[wiki] Loaded index with ${index.size} documents for ${domain}`);
         }
       } catch (error) {
-        console.log(`[wiki] No existing index for ${domain}, starting fresh`);
+        console.log(`[wiki] No existing index for ${domain}, rebuilding from documents...`);
+        await this.rebuildIndex(storage, index);
       }
 
       this.domainStates.set(domain, { storage, index });
     }
     return this.domainStates.get(domain);
+  }
+
+  /**
+   * Rebuild index by scanning all doc_*.json files
+   */
+  async rebuildIndex(storage, index) {
+    try {
+      const files = await storage.listFiles();
+      let rebuilt = 0;
+
+      for (const filename of files) {
+        // Match doc_*.json files
+        const match = filename.match(/^doc_(.+)\.json$/);
+        if (!match) continue;
+
+        const docId = match[1].replace(/_/g, '');
+
+        try {
+          const content = JSON.parse((await storage.readFile(filename)).toString());
+          content._id = docId;
+          const meta = this.createIndexMeta(content);
+          index.set(docId, meta);
+          rebuilt++;
+        } catch (err) {
+          console.error(`[wiki] Failed to rebuild index entry for ${filename}:`, err.message);
+        }
+      }
+
+      if (rebuilt > 0) {
+        console.log(`[wiki] Rebuilt index with ${rebuilt} documents`);
+        // Save the rebuilt index
+        const indexData = {
+          documents: Object.fromEntries(index),
+          updated: new Date().toISOString()
+        };
+        await storage.writeFile('index.json', JSON.stringify(indexData, null, 2));
+      } else {
+        console.log(`[wiki] No documents found, starting with empty index`);
+      }
+    } catch (error) {
+      console.error('[wiki] Failed to rebuild index:', error);
+    }
   }
 
   /**
@@ -143,9 +186,7 @@ export default class WikiAgent {
         // GET - read document (no auth required for public docs)
         if (method === 'get' && permissions.read) {
           // Check Accept header - serve HTML for browsers, JSON for API
-          const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-
-          if (acceptsHtml) {
+          if (req.accepts('html')) {
             // Serve the wiki page viewer
             const pagePath = path.join(__dirname, 'client/page.html');
             if (existsSync(pagePath)) {
@@ -235,6 +276,24 @@ export default class WikiAgent {
       console.error('[wiki] ACL check error:', error);
     }
     return result;
+  }
+
+  /**
+   * Create index metadata from document
+   */
+  createIndexMeta(doc) {
+    return {
+      title: doc.title || doc._id,
+      _pid: doc._pid || '',
+      visibility: doc.visibility || 'public',
+      listed: doc.listed !== false,
+      rootmenu: doc.rootmenu || false,
+      owner: doc.owner || doc._createdBy || 'unknown',
+      _createdBy: doc._createdBy || 'unknown',
+      _created: doc._created || new Date().toISOString(),
+      _modified: doc._modified || doc._created || new Date().toISOString(),
+      _modifiedBy: doc._modifiedBy || doc._createdBy || 'unknown'
+    };
   }
 
   /**
@@ -351,18 +410,7 @@ export default class WikiAgent {
     await this.saveDocument(docId, doc, wikiState);
 
     // Update index
-    const meta = {
-      title: doc.title,
-      _pid: doc._pid,
-      visibility: doc.visibility,
-      listed: doc.listed,
-      rootmenu: doc.rootmenu,
-      owner: doc.owner,
-      _createdBy: doc._createdBy,
-      _created: doc._created,
-      _modified: doc._modified,
-      _modifiedBy: doc._modifiedBy
-    };
+    const meta = this.createIndexMeta(doc);
     wikiState.index.set(docId, meta);
     await this.saveIndex(wikiState);
 
