@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Config } from 'epistery';
-import StorageFactory from './storage/StorageFactory.mjs';
+import StorageFactory from '../epistery-host/utils/storage/StorageFactory.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +28,7 @@ export default class WikiAgent {
    */
   async getDomainState(domain) {
     if (!this.domainStates.has(domain)) {
-      const storage = await StorageFactory.create(null, domain);
+      const storage = await StorageFactory.create(null, domain, 'wiki');
       const index = new Map();
 
       // Load index from storage
@@ -227,7 +227,7 @@ export default class WikiAgent {
 
         // DELETE - remove document (auth required)
         if (method === 'delete' && (permissions.admin || req.episteryClient.address === docId._createdBy)) {
-          const result = await this.delete(req.episteryClient, docId, req.wikiState);
+          const result = await this.delete(req.episteryClient, docId, req.wikiState, req);
           res.json(result);
           return;
         }
@@ -263,14 +263,14 @@ export default class WikiAgent {
     const result = {admin:false,edit:false,read:true};
 
     // Everyone has read access by default
-    if (!req.episteryClient || !this.epistery) {
+    if (!req.episteryClient || !req.domainAcl) {
       return result;
     }
 
     try {
-      const isAdmin = await this.epistery.isListed(req.episteryClient.address, 'epistery::admin');
-      result.admin = isAdmin;
-      result.edit = isAdmin;  // admins can edit
+      const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', req.episteryClient.address,req.hostname);
+      result.admin = access.level >= 3;
+      result.edit = access.level >= 2;  // editors and admins can edit
       return result;
     } catch (error) {
       console.error('[wiki] ACL check error:', error);
@@ -420,9 +420,9 @@ export default class WikiAgent {
 
   /**
    * Delete a document
-   * Only epistery::admin can delete documents (more restrictive than edit)
+   * Only admins can delete documents (more restrictive than edit)
    */
-  async delete(episteryClient, docId, wikiState) {
+  async delete(episteryClient, docId, wikiState, req) {
     if (!docId) throw new Error('Document ID is required');
     if (!episteryClient) throw new Error('Authentication required');
 
@@ -431,11 +431,10 @@ export default class WikiAgent {
       throw new Error('Document not found');
     }
 
-    // Only admins can delete documents
-    // Note: epistery.isListed() handles sponsor fallback internally
-    const isAdmin = await this.epistery?.isListed(episteryClient.address, 'epistery::admin');
-    if (!isAdmin) {
-      throw new Error('Only epistery::admin can delete documents');
+    // Only admins can delete documents (level 3)
+    const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', episteryClient.address,req.hostname);
+    if (access.level < 3) {
+      throw new Error('Only admins can delete documents');
     }
 
     // Remove from index
