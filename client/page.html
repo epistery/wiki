@@ -331,7 +331,7 @@
     let markupRenderer = null;
     let allDocs = [];
     let aceEditor = null;
-    window.epistery = await Witness.connect();
+    window.epistery = await Witness.connect({rootPath:"/"});
 
     // Load ACE editor from CDN
     async function installAce() {
