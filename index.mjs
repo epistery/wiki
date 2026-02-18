@@ -36,10 +36,8 @@ export default class WikiAgent {
         const indexData = JSON.parse((await storage.readFile('index.json')).toString());
         if (indexData && indexData.documents) {
           Object.entries(indexData.documents).forEach(([k, v]) => index.set(k, v));
-          console.log(`[wiki] Loaded index with ${index.size} documents for ${domain}`);
         }
       } catch (error) {
-        console.log(`[wiki] No existing index for ${domain}, rebuilding from documents...`);
         await this.rebuildIndex(storage, index);
       }
 
@@ -75,15 +73,12 @@ export default class WikiAgent {
       }
 
       if (rebuilt > 0) {
-        console.log(`[wiki] Rebuilt index with ${rebuilt} documents`);
         // Save the rebuilt index
         const indexData = {
           documents: Object.fromEntries(index),
           updated: new Date().toISOString()
         };
         await storage.writeFile('index.json', JSON.stringify(indexData, null, 2));
-      } else {
-        console.log(`[wiki] No documents found, starting with empty index`);
       }
     } catch (error) {
       console.error('[wiki] Failed to rebuild index:', error);
@@ -227,7 +222,7 @@ export default class WikiAgent {
 
         // DELETE - remove document (auth required)
         if (method === 'delete' && (permissions.admin || req.episteryClient.address === docId._createdBy)) {
-          const result = await this.delete(req.episteryClient, docId, req.wikiState, req);
+          const result = await this.delete(req.episteryClient, docId, req.wikiState);
           res.json(result);
           return;
         }
@@ -414,7 +409,6 @@ export default class WikiAgent {
     wikiState.index.set(docId, meta);
     await this.saveIndex(wikiState);
 
-    console.log(`[wiki] Document saved: ${docId} (edited by ${episteryClient.address})`);
     return doc;
   }
 
@@ -422,7 +416,7 @@ export default class WikiAgent {
    * Delete a document
    * Only admins can delete documents (more restrictive than edit)
    */
-  async delete(episteryClient, docId, wikiState, req) {
+  async delete(episteryClient, docId, wikiState) {
     if (!docId) throw new Error('Document ID is required');
     if (!episteryClient) throw new Error('Authentication required');
 
@@ -431,17 +425,10 @@ export default class WikiAgent {
       throw new Error('Document not found');
     }
 
-    // Only admins can delete documents (level 3)
-    const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', episteryClient.address,req.hostname);
-    if (access.level < 3) {
-      throw new Error('Only admins can delete documents');
-    }
-
     // Remove from index
     wikiState.index.delete(docId);
     await this.saveIndex(wikiState);
 
-    console.log(`[wiki] Document deleted: ${docId} (by ${episteryClient.address})`);
     return { success: true, docId };
   }
 
