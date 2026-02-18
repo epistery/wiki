@@ -4,63 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wiki Admin</title>
+  <link rel="stylesheet" href="/style/static.css">
+  <script src="/script/common.js"></script>
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      padding: 2em;
-      background: #f5f5f5;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    h1 {
-      margin: 0 0 1em 0;
-      display: flex;
-      align-items: center;
-      gap: 0.5em;
-    }
-    h1 svg {
-      width: 32px;
-      height: 32px;
-    }
     .stats {
       display: flex;
       gap: 2em;
-      margin-bottom: 2em;
-      padding: 1em;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: var(--spacer2);
     }
     .stat {
       text-align: center;
+      flex: 1;
+      padding: var(--spacer);
+      background: var(--bg-color-quiet);
+      border-radius: 8px;
     }
     .stat-value {
       font-size: 2em;
       font-weight: 600;
-      color: #333;
+      color: var(--text-color);
     }
     .stat-label {
       font-size: 0.875em;
-      color: #666;
-    }
-    .documents {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .documents-header {
-      padding: 1em;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .documents-header h2 {
-      margin: 0;
+      color: var(--text-color-quiet);
     }
     .btn {
       padding: 0.5em 1em;
@@ -68,14 +34,14 @@
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.875em;
-      min-width:60px;
+      min-width: 60px;
     }
     .btn-primary {
-      background: #0066cc;
+      background: var(--action-color);
       color: white;
     }
     .btn-primary:hover {
-      background: #0055aa;
+      background: var(--action-color-hilite);
     }
     .btn-danger {
       background: #cc3333;
@@ -89,29 +55,29 @@
     .document-item {
       display: flex;
       align-items: center;
-      padding: 1em;
-      border-bottom: 1px solid #eee;
+      padding: var(--spacer);
+      border-bottom: 1px solid var(--page-border);
     }
     .document-item:last-child {
       border-bottom: none;
     }
     .document-item:hover {
-      background: #f9f9f9;
+      background: var(--bg-color-quiet-d);
     }
     .document-title {
       flex: 1;
     }
     .document-title a {
-      color: #333;
+      color: var(--text-color);
       text-decoration: none;
       font-weight: 500;
     }
     .document-title a:hover {
-      color: #0066cc;
+      color: var(--action-color);
     }
     .document-meta {
       font-size: 0.75em;
-      color: #999;
+      color: var(--text-color-quiet);
       margin-top: 0.25em;
     }
     .document-visibility {
@@ -139,75 +105,65 @@
     .empty {
       padding: 2em;
       text-align: center;
-      color: #666;
+      color: var(--text-color-quiet);
     }
     .error {
       padding: 1em;
       background: #ffe6e6;
       color: #cc0000;
       border-radius: 4px;
-      margin-bottom: 1em;
+      margin-bottom: var(--spacer);
     }
     .loading {
       padding: 2em;
       text-align: center;
-      color: #666;
-    }
-    .container-section {
-      margin-bottom: 2em;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      color: var(--text-color-quiet);
     }
     iframe {
       width: 100%;
-      border:0;
-      height:300px;
+      border: 0;
+      height: 300px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-        <line x1="8" y1="6" x2="16" y2="6"/>
-        <line x1="8" y1="10" x2="16" y2="10"/>
-        <line x1="8" y1="14" x2="12" y2="14"/>
-      </svg>
-      Wiki Admin
-    </h1>
-
-    <div id="error" class="error" style="display: none;"></div>
-
-    <div class="stats" id="stats">
-      <div class="stat">
-        <div class="stat-value" id="doc-count">-</div>
-        <div class="stat-label">Documents</div>
+  <header data-widget="header"></header>
+  <main class="console-layout no-sidebar">
+    <div class="console-main">
+      <div class="console-header">
+        <h1>Wiki Admin</h1>
       </div>
-      <div class="stat">
-        <div class="stat-value" id="public-count">-</div>
-        <div class="stat-label">Public</div>
+
+      <div id="error" class="error" style="display: none;"></div>
+
+      <div class="stats" id="stats">
+        <div class="stat">
+          <div class="stat-value" id="doc-count">-</div>
+          <div class="stat-label">Documents</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="public-count">-</div>
+          <div class="stat-label">Public</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="private-count">-</div>
+          <div class="stat-label">Private</div>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-value" id="private-count">-</div>
-        <div class="stat-label">Private</div>
+
+      <div class="console-panel">
+        <iframe src="/page/acl?agent=@epistery/wiki"></iframe>
+      </div>
+
+      <div class="console-panel">
+        <div class="panel-header-row">
+          <h2>Documents</h2>
+          <button class="btn btn-primary" onclick="createDocument()">New Document</button>
+        </div>
+        <div id="document-list" class="loading">Loading...</div>
       </div>
     </div>
-
-    <div class="container-section">
-      <iframe src="/page/acl?agent=@epistery/wiki"></iframe>
-    </div>
-
-    <div class="documents">
-      <div class="documents-header">
-        <h2>Documents</h2>
-        <button class="btn btn-primary" onclick="createDocument()">New Document</button>
-      </div>
-      <div id="document-list" class="loading">Loading...</div>
-    </div>
-  </div>
+  </main>
 
   <script>
     const API_BASE = '/agent/epistery/wiki';
@@ -254,6 +210,7 @@
             </span>
             <div class="document-actions">
               <button class="btn btn-small" onclick="editDocument('${escapeHtml(doc._id)}')">Edit</button>
+              <a class="btn btn-small" href="${API_BASE}/${encodeURIComponent(doc._id)}?print" target="_blank">Print</a>
               <button class="btn btn-small btn-danger" onclick="deleteDocument('${escapeHtml(doc._id)}')">Delete</button>
             </div>
           </li>

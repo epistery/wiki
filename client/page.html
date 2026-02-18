@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="/style/static.css">
   <link rel="stylesheet" href="/agent/epistery/wiki/client/wiki.css">
   <script src="/script/common.js"></script>
-  <script type="module" src="/script/widgets.mjs"></script>
   <style>
     .wiki-main {
       display: flex;
@@ -257,17 +256,16 @@
     .wiki-access {
       margin-bottom: var(--spacer);
     }
+    @media print {
+      header, .console-sidebar, .wiki-index, .wiki-header-bar, nav, footer { display: none !important; }
+      .console-layout { display: block; }
+      .console-main { padding: 0; }
+      .wiki-body-tray { overflow: visible; padding: 0; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <nav>
-    <a href="/?home" class="logo">
-      <img alt="logo" src="/image/epistery-logo-32.svg" class="logo-window">
-    </a>
-    <div class="nav-menu" id="nav-menu"></div>
-  </nav>
-</header>
+<header data-widget="header"></header>
 
 <main class="console-layout">
   <div class="console-main wiki-main">
@@ -323,7 +321,6 @@
   </main>
 
   <script type="module">
-    import Witness from '/lib/witness.js'
     import ZebraTime from '/lib/zebratime.js'
     const API_BASE = '/agent/epistery/wiki';
 
@@ -331,7 +328,7 @@
     let markupRenderer = null;
     let allDocs = [];
     let aceEditor = null;
-    window.epistery = await Witness.connect({rootPath:"/"});
+    // window.epistery is set by common.js on every page load
 
     // Load ACE editor from CDN
     async function installAce() {
@@ -790,47 +787,38 @@
     });
     document.getElementById('save-btn').addEventListener('click', saveDocument);
 
-    // Move wiki index between sidebar and hamburger based on screen size
+    // Move wiki index between sidebar and header-sidebar-content (mobile slot) based on screen size
     function moveWikiIndex() {
       const wikiIndex = document.querySelector('.wiki-index');
-      const sideBar = document.getElementById('side-bar');
+      const mobileSlot = document.getElementById('header-sidebar-content');
       const consoleSidebar = document.querySelector('.console-sidebar');
 
-      if (!wikiIndex || !sideBar || !consoleSidebar) return;
+      if (!wikiIndex || !mobileSlot || !consoleSidebar) return;
 
       const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-      const isInHamburger = sideBar.contains(wikiIndex);
+      const isInMobileSlot = mobileSlot.contains(wikiIndex);
 
-      if (isMobile && !isInHamburger) {
-        // Move to hamburger menu
-        sideBar.appendChild(wikiIndex);
-      } else if (!isMobile && isInHamburger) {
-        // Move back to sidebar
+      if (isMobile && !isInMobileSlot) {
+        mobileSlot.appendChild(wikiIndex);
+      } else if (!isMobile && isInMobileSlot) {
         consoleSidebar.appendChild(wikiIndex);
       }
     }
 
-    // Wait for common.js to create the side-bar, then setup responsive behavior
-    function waitForSideBar() {
-      const sideBar = document.getElementById('side-bar');
-      if (sideBar) {
-        // Initial position
-        moveWikiIndex();
-        // Listen for resize
-        window.matchMedia('(max-width: 1024px)').addEventListener('change', moveWikiIndex);
-      } else {
-        // Check again shortly
-        setTimeout(waitForSideBar, 100);
-      }
-    }
+    // header.html widget dispatches 'header-ready' when the side-bar is in the DOM
+    document.addEventListener('header-ready', () => {
+      moveWikiIndex();
+      window.matchMedia('(max-width: 1024px)').addEventListener('change', moveWikiIndex);
+    }, { once: true });
 
     // Initial load
     (async () => {
       await loadIndexData();
       await loadDocument(getDocId());
-
-      // Setup responsive wiki index after side-bar exists
-      waitForSideBar();
+      // Auto-print if ?print param present (used by admin Print button)
+      if (new URLSearchParams(window.location.search).has('print')) {
+        window.print();
+      }
     })();
   </script>
 </body>
