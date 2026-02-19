@@ -6,7 +6,7 @@
  */
 
 import { Config } from 'epistery';
-import StorageFactory from './storage/StorageFactory.mjs';
+import StorageFactory from '../epistery-host/utils/storage/StorageFactory.mjs';
 
 async function migrate() {
   console.log('Wiki Storage Migration: Config -> Storj\n');
