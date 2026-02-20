@@ -83,6 +83,10 @@
       align-items: center;
       gap: var(--spacerhalf);
       flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .wiki-breadcrumb a {
@@ -255,6 +259,11 @@
     }
     .wiki-access {
       margin-bottom: var(--spacer);
+    }
+    @media (max-width: 768px) {
+      .wiki-breadcrumb {
+        display: none;
+      }
     }
     @media print {
       header, .console-sidebar, .wiki-index, .wiki-header-bar, nav, footer { display: none !important; }
