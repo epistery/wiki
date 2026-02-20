@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Config } from 'epistery';
+// TODO: revert to '@metric-im/administrate' after publishing 1.2.0
+import { Synchronize } from '../../metric-im/administrate/synchronize.mjs';
 import StorageFactory from '../epistery-host/utils/storage/StorageFactory.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -92,6 +94,11 @@ export default class WikiAgent {
    * @param {express.Router} router - Express router instance
    */
   attach(router) {
+    // Auto-sync with git repo via /_update endpoint (must be before /:docId catch-all)
+    Synchronize.attach(router, __dirname, 'main', async (req) => {
+      return req.domainAcl && await req.domainAcl.isAdmin(req.episteryClient?.address);
+    });
+
     // Domain and epistery middleware
     router.use(async (req, res, next) => {
       req.domain = req.hostname || 'localhost';
