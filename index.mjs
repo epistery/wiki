@@ -234,13 +234,47 @@ export default class WikiAgent {
 
         // Access denied - show friendly message for HTML requests
         if (req.accepts(['html', 'json']) === 'html') {
+          const address = req.episteryClient?.address || '';
+          const addressDisplay = address ? `${address.slice(0,8)}...${address.slice(-6)}` : 'unknown';
           return res.status(403).send(`
             <!DOCTYPE html>
             <html><head><title>Access Denied</title></head>
             <body style="font-family: sans-serif; max-width: 600px; margin: 100px auto; text-align: center;">
               <h1>Access Denied</h1>
-              <p>Browser address: <span style='font-family:monospace;font-weight:bold'>${req.episteryClient.address}</p>
-              <p>Access unavailable. Please contact the administrator.</p>
+              <p>Browser address: <span style='font-family:monospace;font-weight:bold'>${addressDisplay}</span></p>
+              <p>You do not have access to this wiki.</p>
+              <div id="requestForm" style="margin-top:24px;${address ? '' : 'display:none'}">
+                <input type="text" id="requestName" placeholder="Name (optional)" style="width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">
+                <textarea id="requestMessage" placeholder="Message for the host (optional)" style="width:100%;min-height:60px;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;margin-bottom:8px;font-family:inherit;resize:vertical"></textarea>
+                <button onclick="submitRequest()" style="padding:8px 24px;background:#2d5016;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">Request Access</button>
+              </div>
+              <p id="statusMsg" style="margin-top:16px"></p>
+              <script>
+                async function submitRequest() {
+                  try {
+                    const resp = await fetch('/api/acl/request-access', {
+                      method: 'POST',
+                      headers: {'Content-Type':'application/json'},
+                      body: JSON.stringify({
+                        address: '${address}',
+                        listName: 'epistery::reader',
+                        agentName: '@epistery/wiki',
+                        name: document.getElementById('requestName').value.trim(),
+                        message: document.getElementById('requestMessage').value.trim()
+                      })
+                    });
+                    if (resp.ok) {
+                      document.getElementById('requestForm').style.display = 'none';
+                      document.getElementById('statusMsg').textContent = 'Access request submitted. Please wait for approval.';
+                    } else {
+                      const err = await resp.json();
+                      document.getElementById('statusMsg').textContent = err.error || 'Request failed';
+                    }
+                  } catch(e) {
+                    document.getElementById('statusMsg').textContent = 'Request failed: ' + e.message;
+                  }
+                }
+              </script>
             </body></html>
           `);
         }
@@ -471,6 +505,31 @@ export default class WikiAgent {
    */
   sanitizeFilename(name) {
     return name.replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  /**
+   * Contribute to /.well-known/ai discovery response.
+   * Returns public, listed pages for this domain.
+   */
+  async aiDiscovery(domain) {
+    try {
+      const state = await this.getDomainState(domain);
+      const items = [];
+      for (const [docId, meta] of state.index) {
+        if (meta.visibility === 'public' && meta.listed !== false) {
+          items.push({
+            id: docId,
+            title: meta.title || docId,
+            modified: meta._modified || null,
+            url: `/agent/epistery/wiki/${docId}`
+          });
+        }
+      }
+      return { content: { type: 'pages', items } };
+    } catch (err) {
+      console.error('[wiki] aiDiscovery error:', err.message);
+      return {};
+    }
   }
 
   /**
