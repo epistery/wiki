@@ -146,6 +146,10 @@ export default class WikiAgent {
     // Wiki index endpoint - list all documents
     router.get('/index', async (req, res) => {
       try {
+        const permissions = await this.getPermissions(req);
+        if (!permissions.read) {
+          return res.status(403).json({ error: 'Access denied', enableRequestAccess: permissions.enableRequestAccess });
+        }
         const index = await this.getIndex(req.episteryClient, req.wikiState);
         res.json(index);
       } catch (error) {
@@ -256,17 +260,18 @@ export default class WikiAgent {
    * return edit/admin privileges from white list
    */
   async getPermissions(req) {
-    const result = {admin:false,edit:false,read:true};
+    const result = {admin:false, edit:false, read:false, enableRequestAccess:false};
 
-    // Everyone has read access by default
     if (!req.episteryClient || !req.domainAcl) {
       return result;
     }
 
     try {
-      const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', req.episteryClient.address,req.hostname);
+      const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', req.episteryClient.address, req.hostname);
       result.admin = access.level >= 3;
-      result.edit = access.level >= 2;  // editors and admins can edit
+      result.edit = access.level >= 2;
+      result.read = access.level >= 1;
+      result.enableRequestAccess = access.enableRequestAccess;
       return result;
     } catch (error) {
       console.error('[wiki] ACL check error:', error);
