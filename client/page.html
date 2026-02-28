@@ -338,6 +338,7 @@
     let markupRenderer = null;
     let allDocs = [];
     let aceEditor = null;
+    let aclLists = [];
     // window.epistery is set by common.js on every page load
 
     // Load ACE editor from CDN
@@ -382,6 +383,47 @@
         await markupRenderer.init();
       }
       return markupRenderer;
+    }
+
+    // Load ACL list names for visibility dropdown
+    async function loadAclLists() {
+      try {
+        const resp = await fetch(`${API_BASE}/acl-lists`);
+        const data = await resp.json();
+        aclLists = data.lists || [];
+      } catch (err) {
+        console.error('[wiki] Failed to load ACL lists:', err);
+        aclLists = [];
+      }
+    }
+
+    // Populate the visibility dropdown with current options
+    function populateVisibilitySelector(currentValue) {
+      const sel = document.getElementById('edit-visibility');
+      sel.innerHTML = '';
+      // Normalize legacy 'public' to 'default'
+      const val = (currentValue === 'public' || !currentValue) ? 'default' : currentValue;
+      // Fixed options
+      const opts = [
+        { value: 'default', label: 'Default' },
+        { value: 'private', label: 'Private' }
+      ];
+      // Add ACL lists
+      for (const name of aclLists) {
+        opts.push({ value: name, label: `List: ${name}` });
+      }
+      // Check if current value is an unknown list
+      const knownValues = new Set(opts.map(o => o.value));
+      if (!knownValues.has(val)) {
+        opts.push({ value: val, label: `${val} (list not found)` });
+      }
+      for (const opt of opts) {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.textContent = opt.label;
+        sel.appendChild(el);
+      }
+      sel.value = val;
     }
 
     // Get doc ID from URL path
@@ -669,8 +711,9 @@
         const day = new Intl.DateTimeFormat('en-US').format(date)
         meta.push(`<a title='last modified, ${date.toLocaleString()} GMT' id='modified-tag' href='https://zebratime.org'>Modified: ${day}, ${ZebraTime(date)}</a>`);
       }
-      if (currentDoc.visibility && currentDoc.visibility !== 'public') {
-        meta.push('Visibility: ' + currentDoc.visibility);
+      if (currentDoc.visibility && currentDoc.visibility !== 'default' && currentDoc.visibility !== 'public') {
+        const label = currentDoc.visibility === 'private' ? 'Private' : `List: ${currentDoc.visibility}`;
+        meta.push('Visibility: ' + label);
       }
       document.getElementById('doc-meta').innerHTML = meta.join(' | ');
 
@@ -687,7 +730,7 @@
 
       document.getElementById('edit-doc-id').textContent = currentDoc._id;
       document.getElementById('edit-title').value = currentDoc.title || currentDoc._id;
-      document.getElementById('edit-visibility').value = currentDoc.visibility || 'public';
+      populateVisibilitySelector(currentDoc.visibility);
 
       // Initialize ACE editor and set content
       await initAceEditor();
@@ -823,6 +866,7 @@
 
     // Initial load
     (async () => {
+      await loadAclLists();
       await loadIndexData();
       await loadDocument(getDocId());
       // Auto-print if ?print param present (used by admin Print button)

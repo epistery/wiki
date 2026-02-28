@@ -150,7 +150,7 @@ export default class WikiAgent {
         if (!permissions.read) {
           return res.status(403).json({ error: 'Access denied', enableRequestAccess: permissions.enableRequestAccess });
         }
-        const index = await this.getIndex(req.episteryClient, req.wikiState);
+        const index = await this.getIndex(req.episteryClient, req.wikiState, req.domainAcl);
         res.json(index);
       } catch (error) {
         console.error('[wiki] Index error:', error);
@@ -176,6 +176,19 @@ export default class WikiAgent {
       }
     });
 
+    // ACL list names for visibility dropdown
+    router.get('/acl-lists', async (req, res) => {
+      try {
+        const contract = req.domainAcl?.chain?.contract;
+        if (!contract) return res.json({ lists: [] });
+        const names = await contract.getListNames();
+        res.json({ lists: Array.from(names) });
+      } catch (error) {
+        console.error('[wiki] acl-lists error:', error.message);
+        res.json({ lists: [] });
+      }
+    });
+
     // Wiki document CRUD handler
     const handleDocument = async (req, res) => {
       try {
@@ -198,7 +211,7 @@ export default class WikiAgent {
           const pidFromCookie = req.cookies?._pid || '';
           const options = { _pid: pidFromCookie, ...req.query };
 
-          const doc = await this.get(req.episteryClient, docId, options, req.wikiState);
+          const doc = await this.get(req.episteryClient, docId, options, req.wikiState, req.domainAcl);
 
           // Set cookie for next navigation (like wiki-mixin does)
           const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -314,13 +327,49 @@ export default class WikiAgent {
   }
 
   /**
+   * Get the ACL lists a user belongs to.
+   * Caches on episteryClient._wikiUserLists to avoid redundant contract calls.
+   */
+  async getUserLists(episteryClient, domainAcl) {
+    if (episteryClient._wikiUserLists) return episteryClient._wikiUserLists;
+    const lists = new Set();
+    try {
+      const contract = domainAcl?.chain?.contract;
+      if (contract && episteryClient?.address) {
+        const memberships = await contract.getListsForMember(episteryClient.address);
+        for (const entry of memberships) {
+          lists.add(entry.listName);
+        }
+      }
+    } catch (err) {
+      console.error('[wiki] getUserLists error:', err.message);
+    }
+    episteryClient._wikiUserLists = lists;
+    return lists;
+  }
+
+  /**
+   * Check whether a user can access a document given its visibility.
+   * 'default' / 'public' (legacy) → anyone with wiki read access
+   * 'private' → owner only
+   * anything else → ACL list name, check userLists membership
+   */
+  canAccess(visibility, ownerAddress, userAddress, userLists) {
+    if (!visibility || visibility === 'default' || visibility === 'public') return true;
+    if (userAddress && userAddress === ownerAddress) return true;
+    if (visibility === 'private') return false;
+    // Treat as ACL list name
+    return userLists.has(visibility);
+  }
+
+  /**
    * Create index metadata from document
    */
   createIndexMeta(doc) {
     return {
       title: doc.title || doc._id,
       _pid: doc._pid || '',
-      visibility: doc.visibility || 'public',
+      visibility: doc.visibility || 'default',
       listed: doc.listed !== false,
       rootmenu: doc.rootmenu || false,
       owner: doc.owner || doc._createdBy || 'unknown',
@@ -349,12 +398,12 @@ export default class WikiAgent {
   /**
    * Get document index
    */
-  async getIndex(episteryClient, wikiState) {
+  async getIndex(episteryClient, wikiState, domainAcl) {
     if (!episteryClient) throw new Error('Authentication required');
+    const userLists = await this.getUserLists(episteryClient, domainAcl);
     const results = [];
     for (const [docId, meta] of wikiState.index) {
-      // Filter by visibility
-      if (meta.visibility === 'public' || (episteryClient?.address === meta.owner)) {
+      if (this.canAccess(meta.visibility, meta.owner, episteryClient?.address, userLists)) {
         results.push({
           _id: docId,
           title: meta.title,
@@ -372,7 +421,7 @@ export default class WikiAgent {
   /**
    * Get a document by ID
    */
-  async get(episteryClient, docId, options = {}, wikiState) {
+  async get(episteryClient, docId, options = {}, wikiState, domainAcl) {
     if (!docId) docId = this.rootDoc;
     if (!episteryClient) throw new Error('Authentication required');
 
@@ -380,24 +429,24 @@ export default class WikiAgent {
     const meta = wikiState.index.get(docId);
 
     if (!meta) {
-      // Document doesn't exist - return template with _pid from cookie (like wiki-mixin)
+      // Document doesn't exist - inherit visibility from parent
+      const parentId = options._pid || '';
+      const parentMeta = parentId ? wikiState.index.get(parentId) : null;
+      const inheritedVisibility = parentMeta?.visibility || 'default';
       return {
         _id: docId,
         title: docId,
         body: `# ${docId}\n`,
-        _pid: options._pid || '',
-        visibility: 'public',
+        _pid: parentId,
+        visibility: inheritedVisibility,
         _new: true
       };
     }
 
     // Check visibility
-    if (meta.visibility !== 'public') {
-      if (episteryClient && episteryClient.address !== meta.owner) {
-        // Check if user has access via list
-        // For now, only owner can see private docs
-        return null;
-      }
+    const userLists = await this.getUserLists(episteryClient, domainAcl);
+    if (!this.canAccess(meta.visibility, meta.owner, episteryClient?.address, userLists)) {
+      return null;
     }
 
     // Load document content from storage
@@ -431,7 +480,7 @@ export default class WikiAgent {
       title: body.title || docId,
       body: body.body || '',
       _pid: body._pid || options._pid || '',
-      visibility: body.visibility || 'public',
+      visibility: body.visibility || 'default',
       listed: body.listed !== false,
       rootmenu: body.rootmenu || false,
       owner: existingMeta?.owner || episteryClient?.address, // Track original creator
@@ -516,7 +565,7 @@ export default class WikiAgent {
       const state = await this.getDomainState(domain);
       const items = [];
       for (const [docId, meta] of state.index) {
-        if (meta.visibility === 'public' && meta.listed !== false) {
+        if ((meta.visibility === 'public' || meta.visibility === 'default') && meta.listed !== false) {
           items.push({
             id: docId,
             title: meta.title || docId,
