@@ -590,7 +590,13 @@
     async function loadIndexData() {
       try {
         const response = await fetch(`${API_BASE}/index`);
+        if (!response.ok) {
+          console.warn('[wiki] Index returned', response.status);
+          allDocs = [];
+          return;
+        }
         allDocs = await response.json();
+        if (!Array.isArray(allDocs)) allDocs = [];
         renderIndexTree();
       } catch (error) {
         console.error('[wiki] Failed to load index:', error);
@@ -610,6 +616,9 @@
         });
 
         if (!response.ok) {
+          if (response.status === 403) {
+            throw new Error('You do not have access to this wiki. If you just arrived via an invite link, try refreshing the page.');
+          }
           throw new Error(`Failed to load: ${response.status}`);
         }
 
@@ -864,8 +873,22 @@
       window.matchMedia('(max-width: 1024px)').addEventListener('change', moveWikiIndex);
     }, { once: true });
 
+    // Wait for common.js to finish session setup (key exchange sets _epistery cookie).
+    // Without this, API calls can race ahead of the session and get 403.
+    function waitForEpistery(timeout = 5000) {
+      if (window.epistery) return Promise.resolve();
+      return new Promise(resolve => {
+        const timer = setTimeout(resolve, timeout);
+        document.addEventListener('epistery-ready', () => {
+          clearTimeout(timer);
+          resolve();
+        }, { once: true });
+      });
+    }
+
     // Initial load
     (async () => {
+      await waitForEpistery();
       await loadAclLists();
       await loadIndexData();
       await loadDocument(getDocId());

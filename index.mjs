@@ -194,18 +194,22 @@ export default class WikiAgent {
       try {
         const method = req.method.toLowerCase();
         const docId = req.params.docId || this.rootDoc;
+
+        // Always serve the wiki SPA for browser navigation (HTML requests).
+        // common.js must load to establish the epistery session; without it,
+        // expired sessions land on a bare 403 page with no way to recover.
+        // The actual document data is still gated by permissions on the JSON API.
+        if (method === 'get' && req.accepts('html')) {
+          const pagePath = path.join(__dirname, 'client/page.html');
+          if (existsSync(pagePath)) {
+            return res.sendFile(pagePath);
+          }
+        }
+
         const permissions = await this.getPermissions(req)
 
-        // GET - read document (no auth required for public docs)
+        // GET - read document (JSON API)
         if (method === 'get' && permissions.read) {
-          // Check Accept header - serve HTML for browsers, JSON for API
-          if (req.accepts('html')) {
-            // Serve the wiki page viewer
-            const pagePath = path.join(__dirname, 'client/page.html');
-            if (existsSync(pagePath)) {
-              return res.sendFile(pagePath);
-            }
-          }
 
           // Read _pid from cookie for new documents (like wiki-mixin does)
           const pidFromCookie = req.cookies?._pid || '';
