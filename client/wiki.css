@@ -55,3 +55,32 @@
 .wiki-content ul, .wiki-content ol {
     padding-left: var(--spacer2);
 }
+
+.wiki-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacer) 0;
+    font-size: 0.95em;
+}
+
+.wiki-content th,
+.wiki-content td {
+    padding: 0.5em 0.75em;
+    border: 1px solid var(--border-color, #ddd);
+    text-align: left;
+    vertical-align: top;
+}
+
+.wiki-content th {
+    background: var(--bg-color-quiet-d);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.wiki-content tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.wiki-content tr:hover {
+    background: var(--bg-color-quiet-d);
+}
