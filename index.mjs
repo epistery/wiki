@@ -3,8 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Config } from 'epistery';
-// TODO: revert to '@metric-im/administrate' after publishing 1.2.0
-import StorageFactory from '../epistery-host/utils/storage/StorageFactory.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +27,7 @@ export default class WikiAgent {
    */
   async getDomainState(domain) {
     if (!this.domainStates.has(domain)) {
-      const storage = await StorageFactory.create(null, domain, 'wiki');
+      const storage = await this.config.getStorage(domain, 'wiki');
       const index = new Map();
 
       // Load index from storage
