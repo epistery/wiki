@@ -36,16 +36,51 @@ export default class WikiAgent {
         if (indexData && indexData.documents) {
           Object.entries(indexData.documents).forEach(([k, v]) => index.set(k, v));
         }
-        if (index.size === 0) {
-          await this.rebuildIndex(storage, index);
-        }
       } catch (error) {
-        await this.rebuildIndex(storage, index);
+        // index.json missing or unreadable
       }
+
+      // Reconcile: scan storage for doc files missing from the index
+      await this.reconcileIndex(storage, index);
 
       this.domainStates.set(domain, { storage, index });
     }
     return this.domainStates.get(domain);
+  }
+
+  /**
+   * Reconcile index against actual doc files in storage.
+   * Adds any doc_*.json files not present in the index.
+   */
+  async reconcileIndex(storage, index) {
+    try {
+      const files = await storage.listFiles();
+      let added = 0;
+
+      for (const filename of files) {
+        const match = filename.match(/^doc_(.+)\.json$/);
+        if (!match) continue;
+
+        const docId = match[1].replace(/_/g, '');
+        if (index.has(docId)) continue;
+
+        try {
+          const content = JSON.parse((await storage.readFile(filename)).toString());
+          content._id = docId;
+          index.set(docId, this.createIndexMeta(content));
+          added++;
+        } catch (err) {
+          console.error(`[wiki] Failed to index ${filename}:`, err.message);
+        }
+      }
+
+      if (added > 0) {
+        console.log(`[wiki] Reconciled index: added ${added} missing documents`);
+        await this.saveIndex({ storage, index });
+      }
+    } catch (error) {
+      console.error('[wiki] Failed to reconcile index:', error);
+    }
   }
 
   /**
