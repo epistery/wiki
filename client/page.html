@@ -268,9 +268,10 @@
     }
     @media print {
       header, .console-sidebar, .wiki-index, .wiki-header-bar, nav, footer { display: none !important; }
-      .console-layout { display: block; }
-      .console-main { padding: 0; }
-      .wiki-body-tray { overflow: visible; padding: 0; }
+      body { height: auto !important; overflow: visible !important; }
+      .console-layout { display: block !important; overflow: visible !important; height: auto !important; }
+      .console-main, .wiki-main { overflow: visible !important; height: auto !important; padding: 0; }
+      .wiki-body-tray { overflow: visible !important; height: auto !important; padding: 0; }
     }
   </style>
 </head>
@@ -617,7 +618,8 @@
 
         if (!response.ok) {
           if (response.status === 403) {
-            throw new Error('You do not have access to this wiki. If you just arrived via an invite link, try refreshing the page.');
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || 'You do not have access to this wiki. If you just arrived via an invite link, try refreshing the page.');
           }
           throw new Error(`Failed to load: ${response.status}`);
         }

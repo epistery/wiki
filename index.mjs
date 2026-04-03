@@ -260,6 +260,9 @@ export default class WikiAgent {
           if (!doc) {
             return res.status(404).json({ error: 'Document not found' });
           }
+          if (doc._restricted) {
+            return res.status(403).json({ error: 'Document exists but is not accessible to you' });
+          }
 
           // Add write permission flag to response for display purposes
           doc.__permissions = permissions
@@ -272,7 +275,7 @@ export default class WikiAgent {
         // Both methods accepted so "post to the wiki" works naturally
         if ((method === 'post' || method === 'put') && permissions.edit) {
           if (!/^[A-Za-z0-9_]{3,}$/.test(docId)) return res.status(405).json({ error: 'Invalid document ID' });
-          const doc = await this.put(req.episteryClient, docId, req.query, req.body, req.wikiState);
+          const doc = await this.put(req.episteryClient, docId, req.query, req.body, req.wikiState, req.domainAcl);
           doc.__permissions = permissions
           res.json(doc);
           return;
@@ -486,7 +489,7 @@ export default class WikiAgent {
     // Check visibility
     const userLists = await this.getUserLists(episteryClient, domainAcl);
     if (!this.canAccess(meta.visibility, meta.owner, episteryClient?.address, userLists)) {
-      return null;
+      return { _id: docId, _restricted: true };
     }
 
     // Load document content from storage
@@ -507,12 +510,20 @@ export default class WikiAgent {
    * Create or update a document
    * Wikis are collaborative - anyone with write access can edit any document
    */
-  async put(episteryClient, docId, options = {}, body = {}, wikiState) {
+  async put(episteryClient, docId, options = {}, body = {}, wikiState, domainAcl) {
     if (!docId) throw new Error('Document ID is required');
     if (!episteryClient) throw new Error('Authentication required');
 
     const now = new Date().toISOString();
     const existingMeta = wikiState.index.get(docId);
+
+    // Block saving over a document the user cannot access
+    if (existingMeta) {
+      const userLists = await this.getUserLists(episteryClient, domainAcl);
+      if (!this.canAccess(existingMeta.visibility, existingMeta.owner, episteryClient?.address, userLists)) {
+        throw new Error('Document exists but is not accessible to you');
+      }
+    }
 
     // Prepare document
     const doc = {
