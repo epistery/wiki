@@ -36,6 +36,9 @@ export default class WikiAgent {
         if (indexData && indexData.documents) {
           Object.entries(indexData.documents).forEach(([k, v]) => index.set(k, v));
         }
+        if (index.size === 0) {
+          await this.rebuildIndex(storage, index);
+        }
       } catch (error) {
         await this.rebuildIndex(storage, index);
       }
