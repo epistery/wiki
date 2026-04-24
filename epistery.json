@@ -7,14 +7,50 @@
   "icon": "/agent/epistery/wiki/icon.svg",
   "widget": "/agent/epistery/wiki/widget",
   "noUserInterface": false,
-  "permissions": [
-    "wiki:read",
-    "wiki:write",
-    "wiki:admin"
-  ],
   "config": {
     "requireIdentity": false,
     "defaultMode": "passive",
     "rootDoc": "Home"
-  }
+  },
+  "tools": [
+    {
+      "name": "wiki_read",
+      "scope": "wiki:read",
+      "description": "Read a wiki page by its document ID. Returns the page content in markdown.",
+      "method": "GET",
+      "path": "/{page}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "string", "description": "Document ID - a WikiWord using only letters, numbers, and underscores (min 3 chars). Examples: \"Home\", \"BedfordStreet\", \"FAQ_Page\"" }
+        },
+        "required": ["page"]
+      }
+    },
+    {
+      "name": "wiki_write",
+      "scope": "wiki:write",
+      "description": "Create or update a wiki page. The id is a WikiWord document identifier (letters, numbers, underscores only, min 3 chars). The title is a human-readable display name. Content should be markdown.",
+      "method": "POST",
+      "path": "/{page}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "string", "description": "Document ID - a WikiWord using only letters, numbers, and underscores (min 3 chars). Examples: \"NewYorkHistory\", \"AboutUs\", \"FAQ_Page\", \"Chicago\"" },
+          "title": { "type": "string", "description": "Human-readable page title (e.g., \"New York History\")" },
+          "_pid": { "type":  "string", "description": "Parent Document ID. Used to organize documents"},
+          "body": { "type": "string", "description": "Page content (markdown)" }
+        },
+        "required": ["page", "title", "body"]
+      }
+    },
+    {
+      "name": "wiki_list",
+      "scope": "wiki:read",
+      "description": "List all wiki pages. Returns titles and metadata.",
+      "method": "GET",
+      "path": "/index",
+      "inputSchema": { "type": "object", "properties": {} }
+    }
+  ]
 }
