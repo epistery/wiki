@@ -1,5 +1,5 @@
 {
-  "name": "@epistery/wiki",
+  "name": "epistery/wiki",
   "version": "0.1.0",
   "description": "Decentralized wiki with IPFS storage and epistery authentication",
   "author": "Epistery",
