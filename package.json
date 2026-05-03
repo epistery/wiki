@@ -1,6 +1,6 @@
 {
   "name": "@epistery/wiki",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Decentralized wiki with IPFS storage and epistery authentication",
   "type": "module",
   "main": "index.mjs",
