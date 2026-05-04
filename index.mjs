@@ -599,13 +599,9 @@ export default class WikiAgent {
    * Load document content from storage
    */
   async loadDocument(docId, wikiState) {
-    try {
-      const filename = `doc_${this.sanitizeFilename(docId)}.json`;
-      const content = JSON.parse((await wikiState.storage.readFile(filename)).toString());
-      return content;
-    } catch (error) {
-      throw new Error('Document not found');
-    }
+    const filename = `doc_${this.sanitizeFilename(docId)}.json`;
+    const buf = await wikiState.storage.readFile(filename);
+    return JSON.parse(buf.toString());
   }
 
   /**
