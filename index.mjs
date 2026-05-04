@@ -50,36 +50,51 @@ export default class WikiAgent {
 
   /**
    * Reconcile index against actual doc files in storage.
-   * Adds any doc_*.json files not present in the index.
+   * Adds index entries for orphan doc_*.json files, and removes index
+   * entries whose backing file is missing.
    */
   async reconcileIndex(storage, index) {
+    let files;
     try {
-      const files = await storage.listFiles();
-      let added = 0;
-
-      for (const filename of files) {
-        const match = filename.match(/^doc_(.+)\.json$/);
-        if (!match) continue;
-
-        const docId = match[1].replace(/_/g, '');
-        if (index.has(docId)) continue;
-
-        try {
-          const content = JSON.parse((await storage.readFile(filename)).toString());
-          content._id = docId;
-          index.set(docId, this.createIndexMeta(content));
-          added++;
-        } catch (err) {
-          console.error(`[wiki] Failed to index ${filename}:`, err.message);
-        }
-      }
-
-      if (added > 0) {
-        console.log(`[wiki] Reconciled index: added ${added} missing documents`);
-        await this.saveIndex({ storage, index });
-      }
+      files = await storage.listFiles();
     } catch (error) {
-      console.error('[wiki] Failed to reconcile index:', error);
+      // Don't prune on a transient list failure — would wipe the whole index.
+      console.error('[wiki] Failed to reconcile index (listFiles):', error);
+      return;
+    }
+
+    const seenIds = new Set();
+    let added = 0;
+    let removed = 0;
+
+    for (const filename of files) {
+      const match = filename.match(/^doc_(.+)\.json$/);
+      if (!match) continue;
+
+      const docId = match[1];
+      seenIds.add(docId);
+      if (index.has(docId)) continue;
+
+      try {
+        const content = JSON.parse((await storage.readFile(filename)).toString());
+        content._id = docId;
+        index.set(docId, this.createIndexMeta(content));
+        added++;
+      } catch (err) {
+        console.error(`[wiki] Failed to index ${filename}:`, err.message);
+      }
+    }
+
+    for (const docId of Array.from(index.keys())) {
+      if (!seenIds.has(docId)) {
+        index.delete(docId);
+        removed++;
+      }
+    }
+
+    if (added > 0 || removed > 0) {
+      console.log(`[wiki] Reconciled index: +${added} -${removed}`);
+      await this.saveIndex({ storage, index });
     }
   }
 
@@ -96,7 +111,7 @@ export default class WikiAgent {
         const match = filename.match(/^doc_(.+)\.json$/);
         if (!match) continue;
 
-        const docId = match[1].replace(/_/g, '');
+        const docId = match[1];
 
         try {
           const content = JSON.parse((await storage.readFile(filename)).toString());
@@ -568,6 +583,14 @@ export default class WikiAgent {
     // Remove from index
     wikiState.index.delete(docId);
     await this.saveIndex(wikiState);
+
+    // Remove the body file too, otherwise reconcile will resurrect it on restart.
+    const filename = `doc_${this.sanitizeFilename(docId)}.json`;
+    try {
+      await wikiState.storage.deleteFile(filename);
+    } catch (err) {
+      console.error(`[wiki] Failed to delete ${filename}:`, err.message);
+    }
 
     return { success: true, docId };
   }
