@@ -314,7 +314,7 @@ export default class WikiAgent {
                       body: JSON.stringify({
                         address: '${address}',
                         listName: 'epistery::reader',
-                        agentName: '@epistery/wiki',
+                        agentName: 'epistery/wiki',
                         name: document.getElementById('requestName').value.trim(),
                         message: document.getElementById('requestMessage').value.trim()
                       })
@@ -357,7 +357,7 @@ export default class WikiAgent {
     }
 
     try {
-      const access = await req.domainAcl.checkAgentAccess('@epistery/wiki', req.episteryClient.address, req.hostname);
+      const access = await req.domainAcl.checkAgentAccess('epistery/wiki', req.episteryClient.address, req.hostname);
       result.admin = access.level >= 3;
       result.edit = access.level >= 2;
       result.read = access.level >= 1;
