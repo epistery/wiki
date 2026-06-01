@@ -201,7 +201,7 @@ export default class WikiAgent {
         if (!permissions.read) {
           return res.status(403).json({ error: 'Access denied', enableRequestAccess: permissions.enableRequestAccess });
         }
-        const index = await this.getIndex(req.episteryClient, req.wikiState, req.domainAcl);
+        const index = await this.getIndex(req.me, req.wikiState);
         res.json(index);
       } catch (error) {
         console.error('[wiki] Index error:', error);
@@ -258,6 +258,7 @@ export default class WikiAgent {
         }
 
         const permissions = await this.getPermissions(req)
+        const me = req.me
 
         // GET - read document (JSON API)
         if (method === 'get' && permissions.read) {
@@ -266,7 +267,7 @@ export default class WikiAgent {
           const pidFromCookie = req.cookies?._pid || '';
           const options = { _pid: pidFromCookie, ...req.query };
 
-          const doc = await this.get(req.episteryClient, docId, options, req.wikiState, req.domainAcl);
+          const doc = await this.get(me, docId, options, req.wikiState);
 
           // Set cookie for next navigation (like wiki-mixin does)
           const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -290,22 +291,22 @@ export default class WikiAgent {
         // Both methods accepted so "post to the wiki" works naturally
         if ((method === 'post' || method === 'put') && permissions.edit) {
           if (!/^[A-Za-z0-9_]{3,}$/.test(docId)) return res.status(405).json({ error: 'Invalid document ID' });
-          const doc = await this.put(req.episteryClient, docId, req.query, req.body, req.wikiState, req.domainAcl);
+          const doc = await this.put(me, docId, req.query, req.body, req.wikiState);
           doc.__permissions = permissions
           res.json(doc);
           return;
         }
 
         // DELETE - remove document (auth required)
-        if (method === 'delete' && (permissions.admin || req.episteryClient.address === docId._createdBy)) {
-          const result = await this.delete(req.episteryClient, docId, req.wikiState);
+        if (method === 'delete' && (permissions.admin || (me && me.identityAddress === docId._createdBy))) {
+          const result = await this.delete(me, docId, req.wikiState);
           res.json(result);
           return;
         }
 
         // Access denied - show friendly message for HTML requests
         if (req.accepts(['html', 'json']) === 'html') {
-          const address = req.episteryClient?.address || '';
+          const address = me?.identityAddress || '';
           const addressDisplay = address ? `${address.slice(0,8)}...${address.slice(-6)}` : 'unknown';
           return res.status(403).send(`
             <!DOCTYPE html>
@@ -362,48 +363,12 @@ export default class WikiAgent {
   }
 
   /**
-   * return edit/admin privileges from white list
+   * Edit/admin/read privileges for the caller. Identity resolution and ACL
+   * lookup are owned by the host — `req.me` is the same normalized principal
+   * for human and MCP callers (see epistery-host makePrincipal).
    */
   async getPermissions(req) {
-    const result = {admin:false, edit:false, read:false, enableRequestAccess:false};
-
-    if (!req.episteryClient || !req.domainAcl) {
-      return result;
-    }
-
-    try {
-      const access = await req.domainAcl.checkAgentAccess('epistery/wiki', req.episteryClient.address, req.hostname);
-      result.admin = access.level >= 3;
-      result.edit = access.level >= 2;
-      result.read = access.level >= 1;
-      result.enableRequestAccess = access.enableRequestAccess;
-      return result;
-    } catch (error) {
-      console.error('[wiki] ACL check error:', error);
-    }
-    return result;
-  }
-
-  /**
-   * Get the ACL lists a user belongs to.
-   * Caches on episteryClient._wikiUserLists to avoid redundant contract calls.
-   */
-  async getUserLists(episteryClient, domainAcl) {
-    if (episteryClient._wikiUserLists) return episteryClient._wikiUserLists;
-    const lists = new Set();
-    try {
-      const contract = domainAcl?.chain?.contract;
-      if (contract && episteryClient?.address) {
-        const memberships = await contract.getListsForMember(episteryClient.address);
-        for (const entry of memberships) {
-          lists.add(entry.listName);
-        }
-      }
-    } catch (err) {
-      console.error('[wiki] getUserLists error:', err.message);
-    }
-    episteryClient._wikiUserLists = lists;
-    return lists;
+    return req.me.access('epistery/wiki');
   }
 
   /**
@@ -456,12 +421,12 @@ export default class WikiAgent {
   /**
    * Get document index
    */
-  async getIndex(episteryClient, wikiState, domainAcl) {
-    if (!episteryClient) throw new Error('Authentication required');
-    const userLists = await this.getUserLists(episteryClient, domainAcl);
+  async getIndex(me, wikiState) {
+    if (!me) throw new Error('Authentication required');
+    const userLists = await me.lists();
     const results = [];
     for (const [docId, meta] of wikiState.index) {
-      if (this.canAccess(meta.visibility, meta.owner, episteryClient?.address, userLists)) {
+      if (this.canAccess(meta.visibility, meta.owner, me?.identityAddress, userLists)) {
         results.push({
           _id: docId,
           title: meta.title,
@@ -479,9 +444,9 @@ export default class WikiAgent {
   /**
    * Get a document by ID
    */
-  async get(episteryClient, docId, options = {}, wikiState, domainAcl) {
+  async get(me, docId, options = {}, wikiState) {
     if (!docId) docId = this.rootDoc;
-    if (!episteryClient) throw new Error('Authentication required');
+    if (!me) throw new Error('Authentication required');
 
     // Check index for document metadata
     const meta = wikiState.index.get(docId);
@@ -502,8 +467,8 @@ export default class WikiAgent {
     }
 
     // Check visibility
-    const userLists = await this.getUserLists(episteryClient, domainAcl);
-    if (!this.canAccess(meta.visibility, meta.owner, episteryClient?.address, userLists)) {
+    const userLists = await me.lists();
+    if (!this.canAccess(meta.visibility, meta.owner, me?.identityAddress, userLists)) {
       return { _id: docId, _restricted: true };
     }
 
@@ -525,17 +490,17 @@ export default class WikiAgent {
    * Create or update a document
    * Wikis are collaborative - anyone with write access can edit any document
    */
-  async put(episteryClient, docId, options = {}, body = {}, wikiState, domainAcl) {
+  async put(me, docId, options = {}, body = {}, wikiState) {
     if (!docId) throw new Error('Document ID is required');
-    if (!episteryClient) throw new Error('Authentication required');
+    if (!me) throw new Error('Authentication required');
 
     const now = new Date().toISOString();
     const existingMeta = wikiState.index.get(docId);
 
     // Block saving over a document the user cannot access
     if (existingMeta) {
-      const userLists = await this.getUserLists(episteryClient, domainAcl);
-      if (!this.canAccess(existingMeta.visibility, existingMeta.owner, episteryClient?.address, userLists)) {
+      const userLists = await me.lists();
+      if (!this.canAccess(existingMeta.visibility, existingMeta.owner, me?.identityAddress, userLists)) {
         throw new Error('Document exists but is not accessible to you');
       }
     }
@@ -549,11 +514,11 @@ export default class WikiAgent {
       visibility: body.visibility || 'default',
       listed: body.listed !== false,
       rootmenu: body.rootmenu || false,
-      owner: existingMeta?.owner || episteryClient?.address, // Track original creator
-      _createdBy: existingMeta?._createdBy || episteryClient?.address,
+      owner: existingMeta?.owner || me?.identityAddress, // Track original creator
+      _createdBy: existingMeta?._createdBy || me?.identityAddress,
       _created: existingMeta?._created || now,
       _modified: now,
-      _modifiedBy: episteryClient?.address // Track who made this edit
+      _modifiedBy: me?.identityAddress // Track who made this edit
     };
 
     // Save document content to storage
@@ -571,9 +536,9 @@ export default class WikiAgent {
    * Delete a document
    * Only admins can delete documents (more restrictive than edit)
    */
-  async delete(episteryClient, docId, wikiState) {
+  async delete(me, docId, wikiState) {
     if (!docId) throw new Error('Document ID is required');
-    if (!episteryClient) throw new Error('Authentication required');
+    if (!me) throw new Error('Authentication required');
 
     const meta = wikiState.index.get(docId);
     if (!meta) {
