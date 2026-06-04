@@ -40,7 +40,7 @@
           "title": { "type": "string", "description": "Human-readable page title (e.g., \"New York History\")" },
           "visibility": { "type":  "string", "description": "An access list required for viewing this document. Left empty, the access requirement is defined by scope"},
           "_pid": { "type":  "string", "description": "Parent Document ID. Used to organize documents"},
-          "body": { "type": "string", "description": "Page content (markdown)" }
+          "body": { "type": "string", "description": "Page content (markdown). To embed an image or link a file from the epistery/files agent, use /agent/epistery/files/api/file/{id}/preview (append ?w=800 to resize) for inline images, or /agent/epistery/files/api/file/{id}/download for attachments. {id} is the 32-hex-char file id from files_list — never a filename, extension, or storage path." }
         },
         "required": ["page", "title", "body"]
       }
