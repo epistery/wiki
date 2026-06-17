@@ -95,6 +95,31 @@ export default class MarkUp {
         sanitize: false,  // Don't sanitize HTML
         smartypants: false
       });
+
+      // GitHub-flavored alerts: > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION]
+      // marked renders these as plain blockquotes, so we detect the leading marker
+      // in the rendered blockquote and promote it to a styled callout.
+      const ALERT_LABELS = {
+        note: 'Note', tip: 'Tip', important: 'Important',
+        warning: 'Warning', caution: 'Caution'
+      };
+      this.marked.use({
+        renderer: {
+          blockquote(quote) {
+            const match = quote.match(/^\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+            if (!match) return `<blockquote>\n${quote}</blockquote>\n`;
+            const type = match[1].toLowerCase();
+            // Strip the marker. It either sits alone in its own <p>, or leads a
+            // paragraph (optionally followed by a <br> from breaks:true).
+            let inner = quote.replace(/^\s*<p>\[![A-Za-z]+\]\s*<\/p>\s*/i, '');
+            if (inner === quote) {
+              inner = quote.replace(/^\s*<p>\[![A-Za-z]+\]\s*(<br\s*\/?>\s*)?/i, '<p>');
+            }
+            return `<div class="markdown-alert markdown-alert-${type}">\n` +
+              `<p class="markdown-alert-title">${ALERT_LABELS[type]}</p>\n${inner}</div>\n`;
+          }
+        }
+      });
     }
 
     // Initialize Mermaid
