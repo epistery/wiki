@@ -7,13 +7,30 @@
 
 .wiki-content h1,
 .wiki-content h2,
-.wiki-content h3 {
+.wiki-content h3,
+.wiki-content h4,
+.wiki-content h5,
+.wiki-content h6 {
     margin-top: var(--spacer2);
     margin-bottom: var(--spacer);
     color: var(--text-color-d);
+    line-height: 1.3;
 }
 
-.wiki-content h1:first-child {
+/* github-style underline on the top headings */
+.wiki-content h1,
+.wiki-content h2 {
+    padding-bottom: var(--spacerthird);
+    border-bottom: 1px solid var(--page-border);
+}
+
+.wiki-content h4 { font-size: 1em; }
+.wiki-content h5 { font-size: 0.9em; }
+.wiki-content h6 { font-size: 0.85em; color: var(--text-color-quiet); }
+
+.wiki-content h1:first-child,
+.wiki-content h2:first-child,
+.wiki-content h3:first-child {
     margin-top: 0;
 }
 
@@ -83,4 +100,104 @@
 
 .wiki-content tr:hover {
     background: var(--bg-color-quiet-d);
+}
+
+/* blockquotes ( > ) — github flavor: muted text, rust accent bar */
+.wiki-content blockquote {
+    margin: var(--spacer) 0;
+    padding: var(--spacerhalf) var(--spacer);
+    border-left: 4px solid var(--rust-light);
+    background: var(--bg-color-quiet-d);
+    color: var(--text-color-quiet);
+    border-radius: 0 4px 4px 0;
+}
+
+/* tighten paragraph spacing inside a quote */
+.wiki-content blockquote > :first-child { margin-top: 0; }
+.wiki-content blockquote > :last-child { margin-bottom: 0; }
+
+/* nested quotes step the accent color deeper */
+.wiki-content blockquote blockquote {
+    margin: var(--spacerhalf) 0;
+    border-left-color: var(--rust-mid);
+    background: transparent;
+}
+
+/* GFM alerts ( > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] ) */
+.wiki-content .markdown-alert {
+    margin: var(--spacer) 0;
+    padding: var(--spacerhalf) var(--spacer);
+    border-left: 4px solid var(--neutral);
+    border-radius: 0 4px 4px 0;
+    background: var(--bg-color-quiet-d);
+}
+
+.wiki-content .markdown-alert > :first-child { margin-top: 0; }
+.wiki-content .markdown-alert > :last-child { margin-bottom: 0; }
+
+.wiki-content .markdown-alert-title {
+    font-weight: 600;
+    margin-bottom: var(--spacerthird);
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+}
+
+/* github's alert palette, kept for familiarity */
+.wiki-content .markdown-alert-note      { border-left-color: #0969da; }
+.wiki-content .markdown-alert-note .markdown-alert-title      { color: #0969da; }
+.wiki-content .markdown-alert-tip       { border-left-color: #1a7f37; }
+.wiki-content .markdown-alert-tip .markdown-alert-title       { color: #1a7f37; }
+.wiki-content .markdown-alert-important { border-left-color: #8250df; }
+.wiki-content .markdown-alert-important .markdown-alert-title { color: #8250df; }
+.wiki-content .markdown-alert-warning   { border-left-color: #9a6700; }
+.wiki-content .markdown-alert-warning .markdown-alert-title   { color: #9a6700; }
+.wiki-content .markdown-alert-caution   { border-left-color: #cf222e; }
+.wiki-content .markdown-alert-caution .markdown-alert-title   { color: #cf222e; }
+
+/* horizontal rule ( --- ) */
+.wiki-content hr {
+    border: none;
+    border-top: 1px solid var(--page-border);
+    margin: var(--spacer2) 0;
+}
+
+/* emphasis */
+.wiki-content strong { color: var(--text-color-d); font-weight: 600; }
+.wiki-content em { font-style: italic; }
+
+/* GFM strikethrough ( ~~text~~ ) */
+.wiki-content del { color: var(--text-color-quiet); }
+
+/* GFM task lists ( - [ ] / - [x] ) */
+.wiki-content li:has(> input[type="checkbox"]) { list-style: none; margin-left: calc(-1 * var(--spacer)); }
+.wiki-content input[type="checkbox"] { margin-right: var(--spacerhalf); accent-color: var(--rust-mid); }
+
+/* images stay within the column */
+.wiki-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+/* keyboard keys ( <kbd> ) — handy for code/architecture docs */
+.wiki-content kbd {
+    display: inline-block;
+    padding: 0.1em 0.45em;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.4;
+    color: var(--text-color-d);
+    background: var(--bg-color-quiet-d);
+    border: 1px solid var(--page-border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+}
+
+/* highlight ( <mark> ) */
+.wiki-content mark {
+    background: var(--rust-light);
+    color: var(--text-color-d);
+    padding: 0.1em 0.2em;
+    border-radius: 2px;
 }

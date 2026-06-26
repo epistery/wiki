@@ -95,6 +95,31 @@ export default class MarkUp {
         sanitize: false,  // Don't sanitize HTML
         smartypants: false
       });
+
+      // GitHub-flavored alerts: > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION]
+      // marked renders these as plain blockquotes, so we detect the leading marker
+      // in the rendered blockquote and promote it to a styled callout.
+      const ALERT_LABELS = {
+        note: 'Note', tip: 'Tip', important: 'Important',
+        warning: 'Warning', caution: 'Caution'
+      };
+      this.marked.use({
+        renderer: {
+          blockquote(quote) {
+            const match = quote.match(/^\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+            if (!match) return `<blockquote>\n${quote}</blockquote>\n`;
+            const type = match[1].toLowerCase();
+            // Strip the marker. It either sits alone in its own <p>, or leads a
+            // paragraph (optionally followed by a <br> from breaks:true).
+            let inner = quote.replace(/^\s*<p>\[![A-Za-z]+\]\s*<\/p>\s*/i, '');
+            if (inner === quote) {
+              inner = quote.replace(/^\s*<p>\[![A-Za-z]+\]\s*(<br\s*\/?>\s*)?/i, '<p>');
+            }
+            return `<div class="markdown-alert markdown-alert-${type}">\n` +
+              `<p class="markdown-alert-title">${ALERT_LABELS[type]}</p>\n${inner}</div>\n`;
+          }
+        }
+      });
     }
 
     // Initialize Mermaid
@@ -115,22 +140,31 @@ export default class MarkUp {
       return;
     }
 
-    // Load mermaid from CDN
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-      script.onload = () => {
-        window.mermaid.initialize({
-          startOnLoad: false,
-          theme: 'default',
-          securityLevel: 'loose'
-        });
-        this.mermaidInitialized = true;
-        resolve();
-      };
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      script.onload = resolve;
       script.onerror = reject;
       document.head.appendChild(script);
     });
+
+    const config = {
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      flowchart: { nodeSpacing: 60, rankSpacing: 100 }
+    };
+
+    try {
+      const elk = await import('https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.2.0/dist/mermaid-layout-elk.esm.min.mjs');
+      window.mermaid.registerLayoutLoaders(elk.default);
+      config.layout = 'elk';
+    } catch (err) {
+      console.warn('[MarkUp] ELK layout plugin failed to load; falling back to dagre', err);
+    }
+
+    window.mermaid.initialize(config);
+    this.mermaidInitialized = true;
   }
 
   /**
@@ -155,7 +189,7 @@ export default class MarkUp {
     result += `
 <style>
 .doclet-render h1 { margin-top: 0; }
-.mermaid-container { margin: 1em 0; overflow-x: auto; }
+.mermaid-container { margin: 1em 0; }
 .frame-set { display: flex; flex-wrap: wrap; gap: 1em; }
 .frame-container { flex: 1; min-width: 300px; }
 .frame-container.titled { border: 1px solid #ccc; border-radius: 4px; }
