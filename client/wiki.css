@@ -1,3 +1,6 @@
+:root {
+    --page-width: 1024px;
+}
 /* wiki rendering style sheet */
 .wiki-content {
     /*max-width: 800px;*/
