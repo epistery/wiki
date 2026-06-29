@@ -1,6 +1,6 @@
 /* wiki rendering style sheet */
 .wiki-content {
-    max-width: 800px;
+    /*max-width: 800px;*/
     line-height: 1.7;
     color: var(--text-color);
 }
