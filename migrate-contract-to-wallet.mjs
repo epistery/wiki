@@ -13,7 +13,7 @@ console.log(`Migrating wiki data for domain: ${domain}`);
 console.log(`From contract: ${oldContract}`);
 
 const config = new Config();
-const domainConfig = config.read(`/${domain}`);
+const domainConfig = await config.read(`/${domain}`);
 
 const serverWallet = domainConfig.wallet?.address;
 if (!serverWallet) {
