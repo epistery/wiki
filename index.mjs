@@ -297,8 +297,14 @@ export default class WikiAgent {
           return;
         }
 
-        // DELETE - remove document (auth required)
-        if (method === 'delete' && (permissions.admin || (me && me.identityAddress === docId._createdBy))) {
+        // DELETE - remove document (auth required). Admins may delete anything;
+        // otherwise only the document's creator may. Ownership comes from the index
+        // metadata, which carries _createdBy — docId is the page name, a string, so
+        // reading _createdBy off it was always undefined and no creator could ever
+        // delete their own page.
+        const deleteMeta = method === 'delete' ? req.wikiState.index.get(docId) : null;
+        const isCreator = !!(me && deleteMeta && deleteMeta._createdBy === me.identityAddress);
+        if (method === 'delete' && (permissions.admin || isCreator)) {
           const result = await this.delete(me, docId, req.wikiState);
           res.json(result);
           return;
